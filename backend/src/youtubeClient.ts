@@ -136,7 +136,11 @@ export function isYoutubeSearchConfigured(): boolean {
  * alone is still a safe substring match against either spelling.
  */
 function teamNickname(displayName: string): string {
-  return displayName.trim().split(/\s+/).pop() ?? displayName;
+  const nickname = displayName.trim().split(/\s+/).pop() ?? displayName;
+  // MLB quirk: ESPN uses "D-BACKS" abbreviation for Diamondbacks, but
+  // official YouTube titles use the full "Diamondbacks" - convert to match.
+  if (nickname === "D-BACKS") return "Diamondbacks";
+  return nickname;
 }
 
 /** Parses ISO 8601 durations (e.g. "PT9M37S", "PT1H13M") into total seconds. */
