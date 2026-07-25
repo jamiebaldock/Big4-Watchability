@@ -119,6 +119,7 @@ fun AppRoot() {
     var showFavoriteTeams by rememberSaveable { mutableStateOf(false) }
     var showFavoritePlayers by rememberSaveable { mutableStateOf(false) }
     var showHatedPlayers by rememberSaveable { mutableStateOf(false) }
+    var defaultLeagueForAddScreens by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
     var showAlertsSettings by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
     // Plain remember (not rememberSaveable) - Game isn't a Bundle-compatible
@@ -277,6 +278,7 @@ fun AppRoot() {
         FavoriteTeamsScreen(
             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+            defaultLeague = defaultLeagueForAddScreens,
             onBack = { showFavoriteTeams = false }
         )
         return
@@ -292,6 +294,7 @@ fun AppRoot() {
             // so those composition locals aren't in scope here.
             hatedPlayerNames = favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
             onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
+            defaultLeague = defaultLeagueForAddScreens,
             onBack = { showFavoritePlayers = false }
         )
         return
@@ -308,6 +311,7 @@ fun AppRoot() {
             hatedPlayerNames = favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
             onToggleHatedPlayer = favoritesViewModel::toggleHatedPlayer,
             mode = PlayerPickerMode.HATE,
+            defaultLeague = defaultLeagueForAddScreens,
             onBack = { showHatedPlayers = false }
         )
         return
@@ -419,9 +423,9 @@ fun AppRoot() {
                     onToggleStar = starredGamesViewModel::toggleStar,
                     onWatchHighlights = { videoId -> highlightsVideoId = videoId },
                     onGameClick = { showGameDetail = it },
-                    onAddTeamClick = { showFavoriteTeams = true },
-                    onAddPlayerClick = { showFavoritePlayers = true },
-                    onAddHatedPlayerClick = { showHatedPlayers = true },
+                    onAddTeamClick = { defaultLeagueForAddScreens = selectedLeague; showFavoriteTeams = true },
+                    onAddPlayerClick = { defaultLeagueForAddScreens = selectedLeague; showFavoritePlayers = true },
+                    onAddHatedPlayerClick = { defaultLeagueForAddScreens = selectedLeague; showHatedPlayers = true },
                     belledGameIds = alertsViewModel.belledGameIds,
                     onToggleBell = alertsViewModel::toggleBell
                 )

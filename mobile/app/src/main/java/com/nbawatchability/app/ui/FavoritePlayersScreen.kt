@@ -106,9 +106,10 @@ fun FavoritePlayersScreen(
     hatedPlayerNames: Set<String> = emptySet(),
     onToggleHatedPlayer: (FavoritePlayer) -> Unit = {},
     mode: PlayerPickerMode = PlayerPickerMode.FAVORITE,
+    defaultLeague: LeagueGroup = LeagueGroup.NBA,
     onBack: () -> Unit
 ) {
-    var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
+    var selectedLeague by rememberSaveable { mutableStateOf(defaultLeague) }
     var selectedTeam by rememberSaveable { mutableStateOf<Team?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
 

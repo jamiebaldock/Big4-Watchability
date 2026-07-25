@@ -81,9 +81,10 @@ private val BROWSABLE_LEAGUES = listOf(LeagueGroup.NBA, LeagueGroup.WNBA, League
 fun FavoriteTeamsScreen(
     favoriteTeamNames: Set<String>,
     onToggleFavoriteTeam: (Team) -> Unit,
+    defaultLeague: LeagueGroup = LeagueGroup.NBA,
     onBack: () -> Unit
 ) {
-    var selectedLeague by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
+    var selectedLeague by rememberSaveable { mutableStateOf(defaultLeague) }
     var query by rememberSaveable { mutableStateOf("") }
     val viewModel: TeamsViewModel = viewModel()
 
