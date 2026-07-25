@@ -869,10 +869,15 @@ private fun FavoritesTab(
     onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val favoriteGamesViewModel: FavoriteGamesViewModel = viewModel()
-    // Re-fetches whenever the favorited-team set itself changes (add/remove
-    // a team from either this tab's own Teams page or the Settings browse
-    // screen) - List's structural equals means this only actually re-runs
-    // on a real change, not every recomposition.
+    // Re-fetches whenever favorited-team set changes (add/remove a team from
+    // this tab's Teams page, Settings browse, or a long-press from another
+    // tab). Also ensure we always load on entry to this tab, so if the user
+    // added a favorite from another tab (Games/Starred/History), the list
+    // refreshes immediately - don't rely solely on dependency change detection
+    // in case that misses edge cases.
+    LaunchedEffect(Unit) {
+        favoriteGamesViewModel.load(favoritesViewModel.favoriteTeams)
+    }
     LaunchedEffect(favoritesViewModel.favoriteTeams) {
         favoriteGamesViewModel.load(favoritesViewModel.favoriteTeams)
     }
