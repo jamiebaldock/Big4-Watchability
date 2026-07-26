@@ -16,7 +16,7 @@
 // margin vs. a per-sport threshold, gated on being late in the game (final
 // period/inning, or overtime) - still an approximation of live excitement,
 // just no longer an ungrounded one.
-import { claimAlertSend, clearDeadToken, getAlertableDevices, getDeviceFavorites, getGameSubDeviceIds, type AlertDeviceRow } from "./alertStore";
+import { claimAlertSend, clearDeadToken, getAlertableDevices, getDeviceFavorites, getGameSubDeviceIds, recordAlertOutcome, type AlertDeviceRow } from "./alertStore";
 import { fetchScoreboard } from "./espnClient";
 import { DEAD_TOKEN_CODES, sendPush } from "./fcm";
 import { getGamesForDateAnySport } from "./httpHandler";
@@ -221,6 +221,7 @@ async function notifyDevice(device: AlertDeviceRow, game: GameJson, body: string
     utc: game.utc
   });
   for (const result of results) {
+    recordAlertOutcome(device.device_id, game.id, "close_swing", result.ok);
     if (!result.ok && result.errorCode && DEAD_TOKEN_CODES.has(result.errorCode)) {
       clearDeadToken(result.token);
     }

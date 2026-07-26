@@ -304,10 +304,10 @@ function requireAdmin(req: express.Request, res: express.Response): boolean {
   return true;
 }
 
-app.get("/admin/stats", (req, res) => {
+app.get("/admin/stats", async (req, res) => {
   if (!requireAdmin(req, res)) return;
   try {
-    res.json(getAdminStats());
+    res.json(await getAdminStats());
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: "internal error" });

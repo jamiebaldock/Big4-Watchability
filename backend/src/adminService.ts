@@ -12,7 +12,8 @@
 // client calls the other endpoints - they already only care about a bearer
 // token, not how it was obtained.
 import { randomBytes } from "node:crypto";
-import { getDeviceFcmToken } from "./alertStore";
+import { AlertDeliveryStats, getAlertDeliveryStats, getDeviceFcmToken } from "./alertStore";
+import { AnthropicUsage, getAnthropicUsage } from "./anthropicUsageClient";
 import { DEAD_TOKEN_CODES, sendPush } from "./fcm";
 import {
   DAILY_SEARCH_BUDGET,
@@ -31,6 +32,7 @@ import {
   setHighlights,
 } from "./gameStore";
 import { getGamesForDateAnySport } from "./httpHandler";
+import { RenderStatus, getRenderStatus } from "./renderClient";
 import { LeagueGroup } from "./types";
 import { HighlightsLeague, searchHighlightsVideo } from "./youtubeClient";
 
@@ -70,9 +72,23 @@ export interface AdminStats {
   budgetHistory: { date: string; count: number }[];
   lagPercentiles: Record<string, LagPercentiles>;
   outcomeCounts: Record<string, number>;
+  pushStats: AlertDeliveryStats;
+  renderStatus: RenderStatus;
+  anthropicUsage: AnthropicUsage;
 }
 
-export function getAdminStats(): AdminStats {
+/**
+ * Async (unlike the DB-only queries it started as) - renderStatus and
+ * anthropicUsage each make a real outbound API call. Both run alongside the
+ * existing DB reads via Promise.all rather than serially, and both degrade
+ * to { configured: false } with zero added latency when their own env var
+ * isn't set (renderClient.ts/anthropicUsageClient.ts's own doc comments),
+ * so this stays fast for anyone who hasn't wired those up yet. Acceptable
+ * to add real network latency here at all only because this is a low-
+ * frequency, single-operator admin page, not a hot path.
+ */
+export async function getAdminStats(): Promise<AdminStats> {
+  const [renderStatus, anthropicUsage] = await Promise.all([getRenderStatus(), getAnthropicUsage()]);
   return {
     todayCount: getTodaySearchBudgetCount(),
     dailyCap: DAILY_SEARCH_BUDGET,
@@ -86,6 +102,9 @@ export function getAdminStats(): AdminStats {
       mlb: getLagPercentiles("mlb", "mlb"),
     },
     outcomeCounts: getSearchOutcomeCounts(7),
+    pushStats: getAlertDeliveryStats(7),
+    renderStatus,
+    anthropicUsage,
   };
 }
 

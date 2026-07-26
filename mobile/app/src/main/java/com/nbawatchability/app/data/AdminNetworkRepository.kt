@@ -17,12 +17,39 @@ data class LagPercentiles(val p50Ms: Long, val sampleCount: Int, val fromRealDat
 data class BudgetDay(val date: String, val count: Int)
 
 @Serializable
+data class PushStats(
+    val registeredDevices: Int,
+    val sentLastNDays: Int,
+    val deliveredLastNDays: Int,
+    val failedLastNDays: Int
+)
+
+@Serializable
+data class RenderStatus(
+    val configured: Boolean,
+    val serviceStatus: String? = null,
+    val lastDeployStatus: String? = null,
+    val lastDeployAt: String? = null,
+    val error: String? = null
+)
+
+@Serializable
+data class AnthropicUsage(
+    val configured: Boolean,
+    val last7DaysCostUsd: Double? = null,
+    val error: String? = null
+)
+
+@Serializable
 data class AdminStats(
     val todayCount: Int,
     val dailyCap: Int,
     val budgetHistory: List<BudgetDay>,
     val lagPercentiles: Map<String, LagPercentiles>,
-    val outcomeCounts: Map<String, Int>
+    val outcomeCounts: Map<String, Int>,
+    val pushStats: PushStats,
+    val renderStatus: RenderStatus,
+    val anthropicUsage: AnthropicUsage
 )
 
 @Serializable

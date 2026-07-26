@@ -200,6 +200,89 @@ private fun StatsSection(stats: AdminStats, modifier: Modifier = Modifier) {
                 modifier = Modifier.padding(top = 4.dp)
             )
         }
+
+        HorizontalDivider(color = TextMuted.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(text = "Push delivery (Alerts)", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        val push = stats.pushStats
+        Text(
+            text = "${push.registeredDevices} device(s) registered",
+            color = TextSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        Text(
+            text = "Last 7 days — sent ${push.sentLastNDays}, delivered ${push.deliveredLastNDays}, failed ${push.failedLastNDays}",
+            color = if (push.failedLastNDays > 0) TierInstantClassic else TextSecondary,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+
+        HorizontalDivider(color = TextMuted.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(text = "Backend (Render)", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        RenderStatusRows(stats.renderStatus)
+
+        HorizontalDivider(color = TextMuted.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 16.dp))
+
+        Text(text = "Claude API cost", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        AnthropicUsageRows(stats.anthropicUsage)
+    }
+}
+
+@Composable
+private fun RenderStatusRows(render: com.nbawatchability.app.data.RenderStatus) {
+    when {
+        !render.configured -> Text(
+            text = "Not configured - add RENDER_API_KEY on Render to see live service status here.",
+            color = TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        render.error != null -> Text(
+            text = render.error,
+            color = TierInstantClassic,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        else -> {
+            Text(
+                text = "Status: ${render.serviceStatus ?: "unknown"}",
+                color = if (render.serviceStatus == "running") TierWorthYourTime else TierInstantClassic,
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+            Text(
+                text = "Last deploy: ${render.lastDeployStatus ?: "unknown"}${render.lastDeployAt?.let { " (${formatUtc(it)})" } ?: ""}",
+                color = TextSecondary,
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(top = 4.dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun AnthropicUsageRows(usage: com.nbawatchability.app.data.AnthropicUsage) {
+    when {
+        !usage.configured -> Text(
+            text = "Not configured - add ANTHROPIC_ADMIN_KEY on Render to see cost here (requires an Organization Console account - individual accounts can't generate an Admin key).",
+            color = TextMuted,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        usage.error != null -> Text(
+            text = usage.error,
+            color = TierInstantClassic,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp)
+        )
+        else -> Text(
+            text = "Last 7 days: $${"%.2f".format(usage.last7DaysCostUsd ?: 0.0)}",
+            color = TextSecondary,
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.padding(top = 4.dp)
+        )
     }
 }
 

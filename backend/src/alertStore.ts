@@ -54,6 +54,20 @@ db.exec(`
   );
 `);
 
+// Additive migration (not a column in the original CREATE TABLE above) -
+// James's already-live alert_devices/alerts_sent tables on Render's
+// persistent disk predate this, same "ALTER TABLE, don't recreate" approach
+// gameStore.ts's own ensureColumn uses for exactly this reason. NULL means
+// "sent before this column existed" (unknown outcome), not "failed" - only
+// ever written going forward by recordAlertOutcome below.
+function ensureColumn(table: string, column: string, definition: string): void {
+  const existing = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+  if (!existing.some((c) => c.name === column)) {
+    db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
+  }
+}
+ensureColumn("alerts_sent", "delivered", "INTEGER");
+
 function now(): string {
   return new Date().toISOString();
 }
@@ -142,6 +156,46 @@ export function claimAlertSend(deviceId: string, eventId: string, alertType: str
     .prepare(`INSERT OR IGNORE INTO alerts_sent (device_id, event_id, alert_type, sent_at) VALUES (?, ?, ?, ?)`)
     .run(deviceId, eventId, alertType, now());
   return result.changes === 1;
+}
+
+/** Called once sendPush's actual result is known - separate from claimAlertSend above (which fires before the send, purely to prevent a double-send race) so the Admin page's delivery-rate stat reflects what FCM actually reported, not just "we attempted to send." */
+export function recordAlertOutcome(deviceId: string, eventId: string, alertType: string, delivered: boolean): void {
+  db.prepare(`UPDATE alerts_sent SET delivered = ? WHERE device_id = ? AND event_id = ? AND alert_type = ?`).run(
+    delivered ? 1 : 0,
+    deviceId,
+    eventId,
+    alertType
+  );
+}
+
+export interface AlertDeliveryStats {
+  registeredDevices: number;
+  sentLastNDays: number;
+  deliveredLastNDays: number;
+  failedLastNDays: number;
+}
+
+/** The Admin page's push-delivery section - registered device count is a live snapshot; sent/delivered/failed are counted over the trailing [days] window from alerts_sent.sent_at. */
+export function getAlertDeliveryStats(days: number): AlertDeliveryStats {
+  const registeredDevices = (
+    db.prepare(`SELECT COUNT(*) AS c FROM alert_devices WHERE fcm_token IS NOT NULL`).get() as { c: number }
+  ).c;
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS sent,
+         SUM(CASE WHEN delivered = 1 THEN 1 ELSE 0 END) AS delivered,
+         SUM(CASE WHEN delivered = 0 THEN 1 ELSE 0 END) AS failed
+       FROM alerts_sent WHERE sent_at >= ?`
+    )
+    .get(since) as { sent: number; delivered: number | null; failed: number | null };
+  return {
+    registeredDevices,
+    sentLastNDays: row.sent,
+    deliveredLastNDays: row.delivered ?? 0,
+    failedLastNDays: row.failed ?? 0,
+  };
 }
 
 export interface AlertDeviceRow {
