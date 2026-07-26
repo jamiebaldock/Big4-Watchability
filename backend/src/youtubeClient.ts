@@ -129,18 +129,47 @@ export function isYoutubeSearchConfigured(): boolean {
 }
 
 /**
- * Both channels' official titles use just the team nickname ("HORNETS at
+ * Overrides for teams whose official-channel video titles use a different
+ * spelling than the last word of ESPN's own displayName - keyed by that
+ * last word, so any future find is a one-line addition here rather than a
+ * new bespoke branch in teamNickname() itself. Confirmed against real,
+ * current uploads on each league's own channel (not assumed) before adding
+ * an entry - see each comment for what was actually checked.
+ *
+ * Only one confirmed case as of this audit (2026-07-27): MLB's Diamondbacks.
+ * ESPN's displayName is the full "Arizona Diamondbacks", but the @MLB
+ * channel's real titles abbreviate to "D-BACKS" ("D-BACKS vs. NATIONALS:
+ * Official Full Game Highlights...") - the reverse of what an earlier fix
+ * (928116f) assumed; that fix mapped "D-BACKS" -> "Diamondbacks", but ESPN
+ * never actually returns "D-BACKS" as the nickname, so that mapping never
+ * fired and the real query/match (built from "Diamondbacks", which never
+ * appears in a real title) was never fixed. Every other checked team with a
+ * plausibly-abbreviated official nickname - NBA's 76ers, MLB's Red Sox/
+ * White Sox/Blue Jays/Guardians, NFL's Buccaneers - was confirmed to use
+ * its full ESPN-matching nickname in real titles, so no entry is needed for
+ * them. Red Sox/White Sox both reduce to just "Sox" under the existing
+ * last-word extraction (real titles spell out "RED SOX"/"WHITE SOX" in
+ * full, which still contains "SOX" as a substring, so matching still
+ * succeeds even though the search query itself is weaker/more generic than
+ * ideal) - a real but lower-priority quirk than Diamondbacks' total match
+ * failure, left as-is rather than widening this table for a case that isn't
+ * actually broken.
+ */
+const TEAM_NICKNAME_ALIASES: Record<string, string> = {
+  Diamondbacks: "D-BACKS",
+};
+
+/**
+ * Every league's official titles use just the team nickname ("HORNETS at
  * JAZZ", "...Golden State Valkyries vs. Connecticut Sun..."), not the
  * "city + nickname" display name alone - the last word of the display name
- * matches this for every team except "Trail Blazers", where "Blazers"
+ * matches this for every team except the ones in TEAM_NICKNAME_ALIASES
+ * above (currently just Diamondbacks) and "Trail Blazers", where "Blazers"
  * alone is still a safe substring match against either spelling.
  */
 function teamNickname(displayName: string): string {
   const nickname = displayName.trim().split(/\s+/).pop() ?? displayName;
-  // MLB quirk: ESPN uses "D-BACKS" abbreviation for Diamondbacks, but
-  // official YouTube titles use the full "Diamondbacks" - convert to match.
-  if (nickname === "D-BACKS") return "Diamondbacks";
-  return nickname;
+  return TEAM_NICKNAME_ALIASES[nickname] ?? nickname;
 }
 
 /** Parses ISO 8601 durations (e.g. "PT9M37S", "PT1H13M") into total seconds. */
