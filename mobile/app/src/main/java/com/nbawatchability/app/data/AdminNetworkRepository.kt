@@ -53,6 +53,18 @@ private data class ResendRequestBody(val eventId: String)
 data class ResendResult(val matched: Boolean, val videoId: String? = null, val title: String? = null)
 
 @Serializable
+private data class TestPushRequestBody(val deviceId: String)
+
+@Serializable
+data class TestPushResult(
+    val sent: Boolean,
+    val eventId: String? = null,
+    val away: String? = null,
+    val home: String? = null,
+    val lg: String? = null
+)
+
+@Serializable
 private data class AdminErrorResponse(val error: String? = null)
 
 /** Thrown for a bad/expired token specifically, so the ViewModel can fall back to the PIN screen rather than showing a generic error. */
@@ -83,6 +95,12 @@ object AdminNetworkRepository {
         val body = json.encodeToString(ResendRequestBody.serializer(), ResendRequestBody(eventId))
         val response = post("$baseUrl/admin/resend-highlights", body, token)
         json.decodeFromString(ResendResult.serializer(), response)
+    }
+
+    suspend fun sendTestPush(baseUrl: String, token: String, deviceId: String): TestPushResult = withContext(Dispatchers.IO) {
+        val body = json.encodeToString(TestPushRequestBody.serializer(), TestPushRequestBody(deviceId))
+        val response = post("$baseUrl/admin/test-push", body, token)
+        json.decodeFromString(TestPushResult.serializer(), response)
     }
 
     private fun get(urlString: String, token: String): String {

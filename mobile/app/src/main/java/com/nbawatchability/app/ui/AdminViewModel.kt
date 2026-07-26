@@ -12,6 +12,7 @@ import com.nbawatchability.app.data.AdminMissingGame
 import com.nbawatchability.app.data.AdminNetworkRepository
 import com.nbawatchability.app.data.AdminStats
 import com.nbawatchability.app.data.AdminUnauthorizedException
+import com.nbawatchability.app.data.AlertsRepository
 import com.nbawatchability.app.data.BACKEND_BASE_URL
 import kotlinx.coroutines.launch
 
@@ -29,9 +30,21 @@ sealed interface ResendState {
     data class Failed(val message: String) : ResendState
 }
 
+/** Outcome of the "Send test push" button - a single shared state (not keyed like ResendState) since there's only ever one test push in flight at a time. */
+sealed interface TestPushState {
+    data object InFlight : TestPushState
+    data class Sent(val away: String, val home: String) : TestPushState
+    data class Failed(val message: String) : TestPushState
+}
+
 class AdminViewModel(application: Application) : AndroidViewModel(application) {
 
     private val authRepository = AdminAuthRepository(application.applicationContext)
+    // Same on-device identity Alerts registration itself uses (AlertsRepository/
+    // AlertsFirebaseMessagingService) - the test-push button targets THIS
+    // device's own registered token, so it has to ask under the same identity
+    // that registration used, not generate a fresh one.
+    private val alertsRepository = AlertsRepository(application.applicationContext)
 
     // Null until the persisted token flow's first emission arrives - callers
     // (AppRoot) should treat null as "still figuring out whether a session
@@ -56,6 +69,9 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     // snapshot-backed map notifies Compose when one of those entries
     // changes underneath it.
     private val resendStates = mutableStateMapOf<String, ResendState>()
+
+    var testPushState: TestPushState? by mutableStateOf(null)
+        private set
 
     init {
         viewModelScope.launch {
@@ -134,6 +150,27 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                 if (result.matched) loadDashboard()
             } catch (e: Exception) {
                 resendStates[eventId] = ResendState.Failed(e.message ?: "Search failed")
+            }
+        }
+    }
+
+    /**
+     * Sends a real push (via alertsPoller.ts's exact same payload shape) to
+     * this device's own registered token, targeting whatever real game the
+     * backend picks for today - lets James verify the full tap -> deep-link
+     * path (AlertsFirebaseMessagingService -> DeepLinkViewModel -> AppRoot's
+     * jumpToDate) on demand, without waiting for a real close-swing game.
+     */
+    fun sendTestPush() {
+        val activeToken = token ?: return
+        testPushState = TestPushState.InFlight
+        viewModelScope.launch {
+            try {
+                val deviceId = alertsRepository.getOrCreateDeviceId()
+                val result = AdminNetworkRepository.sendTestPush(BACKEND_BASE_URL, activeToken, deviceId)
+                testPushState = TestPushState.Sent(result.away ?: "?", result.home ?: "?")
+            } catch (e: Exception) {
+                testPushState = TestPushState.Failed(e.message ?: "Send failed")
             }
         }
     }

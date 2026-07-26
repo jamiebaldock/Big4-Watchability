@@ -167,6 +167,14 @@ export function getDeviceFavorites(deviceId: string): Array<{ team_name: string;
     .all(deviceId) as Array<{ team_name: string; league_group: string | null }>;
 }
 
+/** The Admin page's "send test push" button - looks up a single device's own token to target it directly, rather than fanning out to every registered device. */
+export function getDeviceFcmToken(deviceId: string): string | null {
+  const row = db.prepare(`SELECT fcm_token FROM alert_devices WHERE device_id = ?`).get(deviceId) as
+    | { fcm_token: string | null }
+    | undefined;
+  return row?.fcm_token ?? null;
+}
+
 export function getGameSubDeviceIds(eventId: string): string[] {
   const rows = db.prepare(`SELECT device_id FROM alert_game_subs WHERE event_id = ?`).all(eventId) as Array<{
     device_id: string;

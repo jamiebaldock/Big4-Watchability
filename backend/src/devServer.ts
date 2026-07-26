@@ -25,6 +25,7 @@ import {
   getAdminStats,
   isValidAdminToken,
   resendHighlightsSearch,
+  sendAdminTestPush,
 } from "./adminService";
 import { isFcmConfigured } from "./fcm";
 import { startHighlightsPoller } from "./highlightsPoller";
@@ -328,6 +329,22 @@ app.post("/admin/resend-highlights", express.json(), async (req, res) => {
   try {
     const eventId = String(req.body?.eventId ?? "");
     res.json(await resendHighlightsSearch(eventId));
+  } catch (err) {
+    if (err instanceof AdminBadRequestError) {
+      res.status(400).json({ error: err.message });
+    } else {
+      console.error(err);
+      res.status(500).json({ error: "internal error" });
+    }
+  }
+});
+
+app.post("/admin/test-push", express.json(), async (req, res) => {
+  if (!requireAdmin(req, res)) return;
+  try {
+    const deviceId = String(req.body?.deviceId ?? "");
+    if (!deviceId) throw new AdminBadRequestError("deviceId is required");
+    res.json(await sendAdminTestPush(deviceId));
   } catch (err) {
     if (err instanceof AdminBadRequestError) {
       res.status(400).json({ error: err.message });

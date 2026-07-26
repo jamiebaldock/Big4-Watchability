@@ -273,7 +273,9 @@ fun AppRoot() {
                 adminViewModel.logOut()
                 showAdminDashboard = false
             },
-            onBack = { showAdminDashboard = false }
+            onBack = { showAdminDashboard = false },
+            testPushState = adminViewModel.testPushState,
+            onSendTestPush = adminViewModel::sendTestPush
         )
         return
     }

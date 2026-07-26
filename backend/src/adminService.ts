@@ -12,6 +12,8 @@
 // client calls the other endpoints - they already only care about a bearer
 // token, not how it was obtained.
 import { randomBytes } from "node:crypto";
+import { getDeviceFcmToken } from "./alertStore";
+import { DEAD_TOKEN_CODES, sendPush } from "./fcm";
 import {
   DAILY_SEARCH_BUDGET,
   GameRow,
@@ -28,6 +30,8 @@ import {
   recordSearchQuotaSpend,
   setHighlights,
 } from "./gameStore";
+import { getGamesForDateAnySport } from "./httpHandler";
+import { LeagueGroup } from "./types";
 import { HighlightsLeague, searchHighlightsVideo } from "./youtubeClient";
 
 export class AdminUnauthorizedError extends Error {}
@@ -161,4 +165,69 @@ export async function resendHighlightsSearch(eventId: string): Promise<AdminRese
   }
   recordHighlightsSearchLog(row.eventId, row.leagueGroup, "no_match");
   return { matched: false };
+}
+
+const TEST_PUSH_LEAGUE_ORDER: LeagueGroup[] = ["nba", "wnba", "mlb", "nfl", "nhl"];
+
+export interface AdminTestPushResult {
+  sent: boolean;
+  eventId?: string;
+  away?: string;
+  home?: string;
+  lg?: string;
+}
+
+/**
+ * The Admin page's "send test push" button - lets James verify the whole
+ * tap-to-deep-link path (AlertsFirebaseMessagingService -> DeepLinkViewModel
+ * -> AppRoot's jumpToDate) on demand, without waiting for a real close-swing
+ * game. Reuses alertsPoller.ts's own notifyDevice payload shape exactly
+ * (title/body/eventId/lg/utc) so this is a genuine dry run of the real path,
+ * not a separate one-off. Targets [deviceId] specifically (the calling
+ * device's own alert registration, sent up by the mobile Admin screen) -
+ * not a fan-out - since this button exists for one operator to test their
+ * own phone, not to alert every real registered device.
+ */
+export async function sendAdminTestPush(deviceId: string): Promise<AdminTestPushResult> {
+  const fcmToken = getDeviceFcmToken(deviceId);
+  if (!fcmToken) {
+    throw new AdminBadRequestError(
+      "this device has no registered push token - open Settings > Alerts once first so it registers"
+    );
+  }
+
+  // Any real, currently-scheduled game works as the deep-link target - the
+  // point is exercising the tap -> jump-to-day path with genuine
+  // eventId/lg/utc values the schedule actually has, not a synthetic one
+  // GamesTab could never find. Todays date, first league (in fixed order)
+  // that actually has at least one game.
+  const today = new Date().toISOString().slice(0, 10);
+  let target: { id?: string; a: string; h: string; lg: string; utc: string } | undefined;
+  for (const leagueGroup of TEST_PUSH_LEAGUE_ORDER) {
+    const games = await getGamesForDateAnySport(today, leagueGroup);
+    if (games.length > 0) {
+      target = games[0];
+      break;
+    }
+  }
+  if (!target?.id) {
+    throw new AdminBadRequestError("no games scheduled today in any league to use as a test target");
+  }
+
+  const results = await sendPush([fcmToken], {
+    title: `${target.a} @ ${target.h}`,
+    body: "Test push - tap to verify deep-linking.",
+    eventId: target.id,
+    lg: target.lg,
+    utc: target.utc,
+  });
+  const result = results[0];
+  if (!result.ok) {
+    if (result.errorCode && DEAD_TOKEN_CODES.has(result.errorCode)) {
+      throw new AdminBadRequestError("this device's push token is no longer valid - reopen Settings > Alerts to re-register");
+    }
+    throw new AdminBadRequestError(`push send failed: ${result.errorCode ?? "unknown error"}`);
+  }
+
+  return { sent: true, eventId: target.id, away: target.a, home: target.h, lg: target.lg };
 }

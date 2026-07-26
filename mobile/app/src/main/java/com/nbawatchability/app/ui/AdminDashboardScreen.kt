@@ -67,7 +67,9 @@ fun AdminDashboardScreen(
     onResend: (String) -> Unit,
     onRefresh: () -> Unit,
     onLogOut: () -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    testPushState: TestPushState? = null,
+    onSendTestPush: () -> Unit = {}
 ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -109,6 +111,10 @@ fun AdminDashboardScreen(
                 modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()).padding(horizontal = 16.dp)
             ) {
                 StatsSection(state.stats, modifier = Modifier.padding(top = 16.dp))
+
+                HorizontalDivider(color = TextMuted.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 16.dp))
+
+                TestPushSection(testPushState = testPushState, onSendTestPush = onSendTestPush)
 
                 HorizontalDivider(color = TextMuted.copy(alpha = 0.3f), modifier = Modifier.padding(vertical = 16.dp))
 
@@ -193,6 +199,46 @@ private fun StatsSection(stats: AdminStats, modifier: Modifier = Modifier) {
                 style = MaterialTheme.typography.bodySmall,
                 modifier = Modifier.padding(top = 4.dp)
             )
+        }
+    }
+}
+
+/**
+ * Sends a real push to this device's own registered token, targeting
+ * whatever real game the backend picks for today - verifies the whole
+ * tap -> deep-link path (AlertsFirebaseMessagingService -> DeepLinkViewModel
+ * -> AppRoot's jumpToDate) without waiting for a real close-swing game.
+ */
+@Composable
+private fun TestPushSection(testPushState: TestPushState?, onSendTestPush: () -> Unit) {
+    Column(modifier = Modifier.fillMaxWidth()) {
+        Text(text = "Deep-link test", color = TextPrimary, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = "Sends a real push to this device, targeting a real game from today's schedule - tap it to verify the notification lands on the right day/league.",
+            color = TextSecondary,
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.padding(top = 4.dp, bottom = 10.dp)
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            when (testPushState) {
+                is TestPushState.InFlight -> CircularProgressIndicator(modifier = Modifier.height(28.dp).width(28.dp), strokeWidth = 2.dp)
+                else -> Button(onClick = onSendTestPush) { Text("Send test push") }
+            }
+        }
+        when (testPushState) {
+            is TestPushState.Sent -> Text(
+                text = "Sent - targeting ${testPushState.away} @ ${testPushState.home}. Check your notification shade.",
+                color = TierWorthYourTime,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            is TestPushState.Failed -> Text(
+                text = testPushState.message,
+                color = TierInstantClassic,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.padding(top = 8.dp)
+            )
+            else -> Unit
         }
     }
 }
