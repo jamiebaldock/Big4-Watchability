@@ -263,12 +263,26 @@ class GameListViewModel : ViewModel() {
         seasonRange = null
         uiState = ScheduleUiState.Loading
         viewModelScope.launch {
+            val startMs = System.currentTimeMillis()
+            val msg = "GameListViewModel.load START for ${leagueGroups.map { it.displayName }}"
+            com.nbawatchability.app.util.FileLogger.log("PERF", msg)
             uiState = try {
+                val seasonStart = System.currentTimeMillis()
                 seasonRange = leagueGroups.singleOrNull()?.let { NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, it) }
+                val seasonMs = System.currentTimeMillis() - seasonStart
+                com.nbawatchability.app.util.FileLogger.log("PERF", "seasonWindow took ${seasonMs}ms")
+
+                val scheduleStart = System.currentTimeMillis()
                 val days = fetchSchedule()
+                val scheduleMs = System.currentTimeMillis() - scheduleStart
+                com.nbawatchability.app.util.FileLogger.log("PERF", "fetchSchedule took ${scheduleMs}ms, got ${days.size} days")
+
                 selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
+                val totalMs = System.currentTimeMillis() - startMs
+                com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load DONE in ${totalMs}ms")
                 ScheduleUiState.Loaded(days)
             } catch (e: Exception) {
+                com.nbawatchability.app.util.FileLogger.logError("PERF", "GameListViewModel.load ERROR", e)
                 ScheduleUiState.Error(e.message ?: "Couldn't reach the backend")
             }
         }

@@ -225,13 +225,25 @@ export function isRealSeasonEvent(event: EspnMlbEvent): boolean {
 
 /** Fetches, scores, and caches one day's MLB games - the MLB analogue of soccerGamesService.ts's getSoccerGamesForDate. */
 export async function getMlbGamesForDate(date: string): Promise<GameJson[]> {
+  const startTime = Date.now();
+  console.log(`[PERF] getMlbGamesForDate START for ${date}`);
+
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
+  const fetchStart = Date.now();
   const events = (await fetchMlbScoreboard(espnDate)).filter(isRealSeasonEvent);
+  const fetchMs = Date.now() - fetchStart;
+  console.log(`[PERF] fetchMlbScoreboard took ${fetchMs}ms, found ${events.length} events`);
 
   const results: GameJson[] = [];
   for (const event of events) {
+    const processStart = Date.now();
     results.push(await processMlbEvent(event));
+    const processMs = Date.now() - processStart;
+    console.log(`[PERF] processMlbEvent took ${processMs}ms`);
   }
+
+  const totalMs = Date.now() - startTime;
+  console.log(`[PERF] getMlbGamesForDate DONE in ${totalMs}ms, returning ${results.length} games`);
   return results;
 }
 
