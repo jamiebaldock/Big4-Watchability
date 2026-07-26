@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.AdminPanelSettings
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
@@ -63,6 +64,7 @@ fun SettingsScreen(
     onFavoriteTeamsClick: () -> Unit,
     onFavoritePlayersClick: () -> Unit,
     onAlertsClick: () -> Unit,
+    onAdminClick: () -> Unit,
     bumpFavoriteTeamGames: Boolean,
     onToggleBumpFavoriteTeamGames: () -> Unit,
     defaultLandingTab: BottomNavTab,
@@ -321,6 +323,29 @@ fun SettingsScreen(
                     Icon(imageVector = Icons.Default.Info, contentDescription = null, tint = TextSecondary)
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(text = "About", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            // Still PIN-gated on the other side of this tap (AdminPinScreen) -
+            // this row is just a discoverable entry point, replacing the old
+            // hidden 12x-title-tap-on-About gesture, which was too easy to
+            // confuse with the separate 8x-version-tap gesture (Player Hater
+            // Mode) sitting right next to it on the same screen.
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onAdminClick)
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.AdminPanelSettings, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Admin", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
                 }
                 Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
             }

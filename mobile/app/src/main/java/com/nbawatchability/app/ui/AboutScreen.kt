@@ -60,11 +60,6 @@ import com.nbawatchability.app.ui.theme.TextSecondary
 // number after he switched from 8 to 24.
 private const val TAPS_TO_UNLOCK_SECRET = 8
 
-// Tap the app title this many times to reach the hidden Admin page - a
-// separate counter on a separate element from the version number above, so
-// the two hidden destinations never fight over the same tap target/count.
-private const val TAPS_TO_UNLOCK_ADMIN = 12
-
 // Same contact address already published in play-store/privacy-policy.txt -
 // reused here rather than introduced fresh, so there's one address for users
 // to remember, not two.
@@ -77,11 +72,10 @@ private const val PRIVACY_POLICY_URL = "https://jamiebaldock.github.io/NBA-Watch
 /** Reached from Settings rather than the bottom nav - frees up a nav slot for Starred. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit, onAdminUnlocked: () -> Unit) {
+fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
     // Plain remember, not rememberSaveable/persisted - resets every time this
     // screen is (re)entered, same as a real hidden-menu tap counter should.
     var tapCount by remember { mutableIntStateOf(0) }
-    var titleTapCount by remember { mutableIntStateOf(0) }
     val context = LocalContext.current
 
     Scaffold(
@@ -110,19 +104,11 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit, onAdminUnlocke
                     .padding(top = 24.dp, bottom = 16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Undocumented on purpose - see TAPS_TO_UNLOCK_ADMIN above.
                 Text(
                     text = "Big4 Watchability",
                     color = TextPrimary,
                     style = MaterialTheme.typography.titleLarge.copy(fontSize = 26.sp),
-                    fontWeight = FontWeight.Bold,
-                    modifier = Modifier.clickable {
-                        titleTapCount++
-                        if (titleTapCount >= TAPS_TO_UNLOCK_ADMIN) {
-                            titleTapCount = 0
-                            onAdminUnlocked()
-                        }
-                    }
+                    fontWeight = FontWeight.Bold
                 )
                 Text(
                     text = "Spoiler-free NBA, WNBA, MLB, NFL & NHL watchability scores.",

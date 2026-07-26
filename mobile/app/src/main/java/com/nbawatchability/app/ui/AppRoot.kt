@@ -221,16 +221,7 @@ fun AppRoot() {
     if (showAbout) {
         AboutScreen(
             onBack = { showAbout = false },
-            onSecretUnlocked = { showAbout = false; showSecret = true },
-            onAdminUnlocked = {
-                showAbout = false
-                if (adminViewModel.token != null) {
-                    showAdminDashboard = true
-                    adminViewModel.loadDashboard()
-                } else {
-                    showAdminPin = true
-                }
-            }
+            onSecretUnlocked = { showAbout = false; showSecret = true }
         )
         return
     }
@@ -425,6 +416,14 @@ fun AppRoot() {
                     onFavoriteTeamsClick = { showFavoriteTeams = true },
                     onFavoritePlayersClick = { showFavoritePlayers = true },
                     onAlertsClick = { showAlertsSettings = true },
+                    onAdminClick = {
+                        if (adminViewModel.token != null) {
+                            showAdminDashboard = true
+                            adminViewModel.loadDashboard()
+                        } else {
+                            showAdminPin = true
+                        }
+                    },
                     bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                     onToggleBumpFavoriteTeamGames = appSettingsViewModel::toggleBumpFavoriteTeamGames,
                     defaultLandingTab = BottomNavTab.entries.find { it.name == appSettingsViewModel.settings.defaultLandingTab } ?: BottomNavTab.GAMES,
