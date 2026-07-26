@@ -137,6 +137,15 @@ fun AppRoot() {
     val favoritesViewModel: FavoritesViewModel = viewModel()
     val alertsViewModel: AlertsViewModel = viewModel()
     val adminViewModel: AdminViewModel = viewModel()
+    // Same Activity-scoped instance MainActivity's onCreate/onNewIntent
+    // already fed a tapped Alerts push's eventId/league/date into.
+    val deepLinkViewModel: DeepLinkViewModel = viewModel()
+    // Which date GamesTab should jump to once it's this deep link's target
+    // league's slate is loaded - held here (not just read straight off
+    // deepLinkViewModel.pending down in GamesTab) since consuming a deep
+    // link also needs to force-close whatever overlay/tab was showing,
+    // which only this top-level composable can do.
+    var pendingJumpDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
 
     // Re-registers this device (favorites + enabled-leagues snapshot) on
     // first composition and again whenever either changes, so the backend's
@@ -165,6 +174,32 @@ fun AppRoot() {
     // no race between "first composition" and "settings arrived".
     var selectedTab by rememberSaveable {
         mutableStateOf(BottomNavTab.entries.find { it.name == appSettingsViewModel.settings.defaultLandingTab } ?: BottomNavTab.GAMES)
+    }
+
+    // A tapped Alerts push overrides whatever the app would otherwise have
+    // opened to - force-closes every overlay below (so a deep link always
+    // actually lands on the game, not stuck behind e.g. an open Settings
+    // screen), switches to Games on the target league, and hands the target
+    // date to GamesTab (below) via pendingJumpDate once that tab's own
+    // schedule for the (possibly just-switched-to) league has loaded.
+    LaunchedEffect(deepLinkViewModel.pending) {
+        val link = deepLinkViewModel.pending ?: return@LaunchedEffect
+        showAbout = false
+        showSecret = false
+        showAdminPin = false
+        showAdminDashboard = false
+        showRubricWeights = false
+        showSelectedSports = false
+        showFavoriteTeams = false
+        showFavoritePlayers = false
+        showHatedPlayers = false
+        showAlertsSettings = false
+        highlightsVideoId = null
+        showGameDetail = null
+        selectedTab = BottomNavTab.GAMES
+        appSettingsViewModel.selectLeague(link.league)
+        pendingJumpDate = link.date
+        deepLinkViewModel.clear()
     }
 
     // Back from About/rating weights/Selected Sports returns to whatever tab
@@ -456,6 +491,8 @@ fun AppRoot() {
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
+                            pendingJumpDate = pendingJumpDate,
+                            onPendingJumpConsumed = { pendingJumpDate = null },
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
@@ -601,7 +638,13 @@ private fun GamesTab(
     minTierFilter: Tier,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
     belledGameIds: Set<String> = emptySet(),
-    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
+    onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {},
+    // A tapped Alerts push's target date (AppRoot's deep-link consumer) -
+    // jumped to once this tab's own schedule for the (possibly just-
+    // switched-to) league has finished loading, see the LaunchedEffect
+    // below. Null the overwhelming rest of the time (no pending deep link).
+    pendingJumpDate: java.time.LocalDate? = null,
+    onPendingJumpConsumed: () -> Unit = {}
 ) {
     val viewModel: GameListViewModel = viewModel()
     // Only the currently-enabled leagues that actually have a real backend
@@ -620,6 +663,19 @@ private fun GamesTab(
     // All-Leagues selection, or the enabled-leagues set) changes - a full
     // fresh load, not a merge with whatever was showing.
     LaunchedEffect(selectedLeague, isAllLeaguesSelected, enabledLeagues) { viewModel.load(leagueGroups) }
+
+    // A tapped Alerts push's target date - gated on the schedule actually
+    // being Loaded (not just "load() was called") since AppRoot's deep-link
+    // consumer may have just switched selectedLeague this same recomposition,
+    // which reset viewModel.uiState back to Loading above; jumpToDate itself
+    // is a no-op against a non-Loaded state, so this waits for that fetch to
+    // land before jumping, then clears the request so it can't re-fire.
+    LaunchedEffect(pendingJumpDate, viewModel.uiState) {
+        if (pendingJumpDate != null && viewModel.uiState is ScheduleUiState.Loaded) {
+            viewModel.jumpToDate(pendingJumpDate)
+            onPendingJumpConsumed()
+        }
+    }
 
     // The busiest-day easter egg is only meaningful in "All Leagues" mode
     // (a cross-league record) - fires once per real (year, enabled-leagues)
@@ -876,9 +932,11 @@ private fun FavoritesTab(
     // refreshes immediately - don't rely solely on dependency change detection
     // in case that misses edge cases.
     LaunchedEffect(Unit) {
+        com.nbawatchability.app.util.FileLogger.log("FAVS", "FavoritesTab initial load: ${favoritesViewModel.favoriteTeams.size} teams")
         favoriteGamesViewModel.load(favoritesViewModel.favoriteTeams)
     }
     LaunchedEffect(favoritesViewModel.favoriteTeams) {
+        com.nbawatchability.app.util.FileLogger.log("FAVS", "favoriteTeams changed: ${favoritesViewModel.favoriteTeams.size} teams (${favoritesViewModel.favoriteTeams.map { it.name }.joinToString(", ")})")
         favoriteGamesViewModel.load(favoritesViewModel.favoriteTeams)
     }
     FavoritesScreen(

@@ -212,7 +212,13 @@ async function notifyDevice(device: AlertDeviceRow, game: GameJson, body: string
   const results = await sendPush([device.fcm_token], {
     title: `${game.a} @ ${game.h}`,
     body,
-    eventId: game.id
+    eventId: game.id,
+    // Deep-link data: which league/day to land the tap on (mobile's
+    // AlertsFirebaseMessagingService reads these off the intent to jump
+    // straight to this game's tile instead of just opening the app on
+    // whatever tab/day it last had selected).
+    lg: game.lg,
+    utc: game.utc
   });
   for (const result of results) {
     if (!result.ok && result.errorCode && DEAD_TOKEN_CODES.has(result.errorCode)) {

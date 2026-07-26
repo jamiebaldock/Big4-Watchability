@@ -18,6 +18,7 @@ import com.nbawatchability.app.data.AlertsRepository
 import com.nbawatchability.app.data.AppSettingsRepository
 import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.FavoritesRepository
+import com.nbawatchability.app.ui.DeepLinkViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -73,6 +74,9 @@ class AlertsFirebaseMessagingService : FirebaseMessagingService() {
         // not FCM's built-in notification block.
         val title = message.data["title"] ?: "Big4 Watchability"
         val body = message.data["body"] ?: return
+        val eventId = message.data["eventId"]
+        val lg = message.data["lg"]
+        val utc = message.data["utc"]
         val appContext = applicationContext
 
         CoroutineScope(Dispatchers.IO).launch {
@@ -90,7 +94,16 @@ class AlertsFirebaseMessagingService : FirebaseMessagingService() {
                     android.app.PendingIntent.getActivity(
                         appContext,
                         0,
-                        android.content.Intent(appContext, MainActivity::class.java),
+                        android.content.Intent(appContext, MainActivity::class.java).apply {
+                            // Deep-link extras (which game/day to land on) -
+                            // only set when all three arrived together;
+                            // MainActivity/DeepLinkViewModel silently no-ops
+                            // on an intent missing any of them (e.g. this
+                            // notification's own tap-to-dismiss re-launch).
+                            if (eventId != null && lg != null && utc != null) {
+                                DeepLinkViewModel.putExtras(this, eventId, lg, utc)
+                            }
+                        },
                         android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE
                     )
                 )
