@@ -7,8 +7,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.nbawatchability.app.data.BACKEND_BASE_URL
 import com.nbawatchability.app.data.FavoritePlayer
 import com.nbawatchability.app.data.FavoritesRepository
+import com.nbawatchability.app.data.LeagueGroup
+import com.nbawatchability.app.data.NetworkLeagueContentRepository
 import com.nbawatchability.app.data.Team
 import kotlinx.coroutines.launch
 
@@ -43,6 +46,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             repository.favoriteTeams.collect {
                 favoriteTeams = it
                 isLoaded = true
+                reconcileMissingTeamIds(it)
             }
         }
         viewModelScope.launch {
@@ -50,6 +54,56 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
         }
         viewModelScope.launch {
             repository.hatedPlayers.collect { hatedPlayers = it }
+        }
+    }
+
+    /**
+     * Backfills a real ESPN team id onto any favorite that doesn't have one -
+     * silently a no-op once every favorite already has an id (the common
+     * case), so this is cheap to call on every emission. A blank id only
+     * ever happens via the long-press-a-team-name-on-a-tile quick-add
+     * (GameCard.kt's onLongPress constructs Team(name, logo, leagueGroup)
+     * with no id, since GameJson carries no team-id field to give it) - the
+     * "Add a favorite team" search screen always uses the real Team object
+     * straight from the backend's /teams response, id included. The missing
+     * id was invisible on the Teams management page (no id check there) but
+     * silently dropped that team from Favorites' Upcoming/Past Games list
+     * (FavoriteGamesViewModel.fetchAll requires id.isNotBlank() - the
+     * backend's team-schedule endpoint needs a real ESPN id to query)
+     * - James's report, 2026-07-27.
+     *
+     * Fetches each affected league's real /teams list once and matches by
+     * name - the same lookup TeamsViewModel already does for the search
+     * screen, just run automatically here instead of requiring the user to
+     * open that screen for it to happen. Runs for every league with at
+     * least one id-less favorite (not just the one most recently added),
+     * so this also self-heals any favorite added before this fix existed,
+     * not just new ones going forward.
+     */
+    private fun reconcileMissingTeamIds(current: List<Team>) {
+        val leaguesNeedingRepair = current
+            .filter { it.id.isBlank() && it.leagueGroup != null }
+            .mapNotNull { team -> LeagueGroup.entries.find { it.apiValue == team.leagueGroup } }
+            .distinct()
+        if (leaguesNeedingRepair.isEmpty()) return
+
+        viewModelScope.launch {
+            // Built up locally across every league before persisting once at
+            // the end, rather than writing (and re-reading the ViewModel's
+            // own favoriteTeams) per league - that write is an async
+            // DataStore round-trip, so a second league's repair could
+            // otherwise run against a stale pre-first-repair snapshot and
+            // clobber it.
+            var working = current
+            for (leagueGroup in leaguesNeedingRepair) {
+                val realTeams = runCatching { NetworkLeagueContentRepository.teams(BACKEND_BASE_URL, leagueGroup).teams }
+                    .getOrNull() ?: continue
+                val byName = realTeams.associateBy { it.name }
+                working = working.map { fav ->
+                    if (fav.id.isBlank() && fav.leagueGroup == leagueGroup.apiValue) byName[fav.name] ?: fav else fav
+                }
+            }
+            if (working != current) repository.setFavoriteTeams(working)
         }
     }
 
