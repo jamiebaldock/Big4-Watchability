@@ -146,6 +146,18 @@ fun AppRoot() {
     // link also needs to force-close whatever overlay/tab was showing,
     // which only this top-level composable can do.
     var pendingJumpDate by remember { mutableStateOf<java.time.LocalDate?>(null) }
+    // The deep link's target league, held as plain local Compose state (not
+    // read back from appSettingsViewModel.settings) specifically so the
+    // Games tab can render the RIGHT league on the very first frame after a
+    // notification tap. appSettingsViewModel.selectLeague() below still
+    // persists the choice, but that's a DataStore write followed by an
+    // async flow re-emission - real, visible latency (the bug James hit:
+    // opens on the previously-viewed league, sits for a few seconds, then
+    // jumps) if selectedLeague below waited on that round-trip instead of
+    // this synchronous local value. Cleared once GamesTab's own jumpToDate
+    // has actually consumed pendingJumpDate, by which point the DataStore
+    // round-trip has had a full load cycle's worth of time to land anyway.
+    var pendingJumpLeague by remember { mutableStateOf<LeagueGroup?>(null) }
 
     // Re-registers this device (favorites + enabled-leagues snapshot) on
     // first composition and again whenever either changes, so the backend's
@@ -197,6 +209,7 @@ fun AppRoot() {
         highlightsVideoId = null
         showGameDetail = null
         selectedTab = BottomNavTab.GAMES
+        pendingJumpLeague = link.league
         appSettingsViewModel.selectLeague(link.league)
         pendingJumpDate = link.date
         deepLinkViewModel.clear()
@@ -401,7 +414,12 @@ fun AppRoot() {
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
-            val selectedLeague = appSettingsViewModel.settings.selectedLeague
+            // pendingJumpLeague wins over the persisted setting while a deep
+            // link is still being applied - see its own declaration above
+            // for why (avoids a multi-second flash of the previously-viewed
+            // league while appSettingsViewModel.selectLeague's DataStore
+            // write/re-emit round-trip is still in flight).
+            val selectedLeague = pendingJumpLeague ?: appSettingsViewModel.settings.selectedLeague
             val enabledLeagues = appSettingsViewModel.settings.enabledLeagues
 
             // Settings and Favorites are both global (not scoped to a
@@ -481,7 +499,12 @@ fun AppRoot() {
                             nhlWeights = nhlSettingsViewModel.weights,
                             selectedLeague = selectedLeague,
                             onLeagueSelected = appSettingsViewModel::selectLeague,
-                            isAllLeaguesSelected = appSettingsViewModel.settings.isAllLeaguesSelected,
+                            // Force out of All-Leagues while a deep link is
+                            // pending, same reasoning as selectedLeague above -
+                            // appSettingsViewModel.setAllLeaguesSelected(false)
+                            // (inside selectLeague()) has the same async
+                            // DataStore lag.
+                            isAllLeaguesSelected = if (pendingJumpLeague != null) false else appSettingsViewModel.settings.isAllLeaguesSelected,
                             onAllLeaguesSelected = { appSettingsViewModel.setAllLeaguesSelected(true) },
                             enabledLeagues = enabledLeagues,
                             showNumericScore = appSettingsViewModel.settings.showNumericScore,
@@ -493,7 +516,7 @@ fun AppRoot() {
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
                             pendingJumpDate = pendingJumpDate,
-                            onPendingJumpConsumed = { pendingJumpDate = null },
+                            onPendingJumpConsumed = { pendingJumpDate = null; pendingJumpLeague = null },
                             favoritePlayerNames = favoritesViewModel.favoritePlayers.map { it.name }.toSet(),
                             onToggleFavoritePlayer = favoritesViewModel::toggleFavoritePlayer,
                             minTierFilterEnabled = appSettingsViewModel.settings.minTierFilterEnabled,
