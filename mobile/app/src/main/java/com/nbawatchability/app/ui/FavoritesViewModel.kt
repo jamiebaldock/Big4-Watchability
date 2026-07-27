@@ -102,8 +102,25 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
                     .onFailure { FileLogger.logError("FAVS", "reconcile: /teams fetch failed for ${leagueGroup.apiValue}", it) }
                     .getOrNull() ?: continue
                 val byName = realTeams.associateBy { it.name }
+                // Patch only [id] onto the existing favorite - never swap in
+                // the whole real Team object. Backend TeamJson (the /teams
+                // response this decodes) has no leagueGroup field at all, so
+                // a full substitution silently wiped leagueGroup to null on
+                // every repaired team: invisible on the Teams page's own
+                // group-by-leagueGroup list (bucketed into the hidden
+                // "Other"/null group instead of its real league) and fatal
+                // for FavoriteGamesViewModel.fetchAll's own leagueGroup !=
+                // null eligibility check - a real regression James caught,
+                // reproduced live in the emulator (2026-07-27): the write
+                // succeeded and the id got fixed, but the team vanished from
+                // both the Teams page and Past/Upcoming Games because of
+                // this exact leagueGroup loss, not because the add failed.
                 working = working.map { fav ->
-                    if (fav.id.isBlank() && fav.leagueGroup == leagueGroup.apiValue) byName[fav.name] ?: fav else fav
+                    if (fav.id.isBlank() && fav.leagueGroup == leagueGroup.apiValue) {
+                        byName[fav.name]?.let { real -> fav.copy(id = real.id) } ?: fav
+                    } else {
+                        fav
+                    }
                 }
             }
             if (working != current) {
