@@ -15,6 +15,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.foundation.clickable
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -23,10 +24,17 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -69,7 +77,10 @@ fun AdminDashboardScreen(
     onLogOut: () -> Unit,
     onBack: () -> Unit,
     testPushState: TestPushState? = null,
-    onSendTestPush: () -> Unit = {}
+    onSendTestPush: () -> Unit = {},
+    isManualEntryExpanded: (String) -> Boolean = { false },
+    onToggleManualEntry: (String) -> Unit = {},
+    onSubmitManualLink: (String, String) -> Unit = { _, _ -> }
 ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -136,7 +147,10 @@ fun AdminDashboardScreen(
                         MissingGameRow(
                             game = game,
                             resendState = resendStateFor(game.eventId),
-                            onResend = { onResend(game.eventId) }
+                            onResend = { onResend(game.eventId) },
+                            isManualEntryExpanded = isManualEntryExpanded(game.eventId),
+                            onToggleManualEntry = { onToggleManualEntry(game.eventId) },
+                            onSubmitManualLink = { url -> onSubmitManualLink(game.eventId, url) }
                         )
                         HorizontalDivider(color = TextMuted.copy(alpha = 0.2f))
                     }
@@ -327,7 +341,14 @@ private fun TestPushSection(testPushState: TestPushState?, onSendTestPush: () ->
 }
 
 @Composable
-private fun MissingGameRow(game: AdminMissingGame, resendState: ResendState?, onResend: () -> Unit) {
+private fun MissingGameRow(
+    game: AdminMissingGame,
+    resendState: ResendState?,
+    onResend: () -> Unit,
+    isManualEntryExpanded: Boolean,
+    onToggleManualEntry: () -> Unit,
+    onSubmitManualLink: (String) -> Unit
+) {
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 10.dp)) {
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
@@ -368,6 +389,57 @@ private fun MissingGameRow(game: AdminMissingGame, resendState: ResendState?, on
                 modifier = Modifier.padding(top = 4.dp)
             )
             else -> Unit
+        }
+        // The "paste a link myself" fallback - offered once a real search
+        // came back empty (NotFound), and kept visible through a failed
+        // submit attempt too (isManualEntryExpanded, independent of
+        // resendState) so a typo'd URL can be corrected and retried rather
+        // than the field vanishing out from under James right when he needs
+        // it. Disappears entirely once a match lands (ResendState.Found),
+        // same moment the whole row is about to drop off the list anyway
+        // (the backend reload that follows a successful save no longer
+        // returns this game - it's not missing anymore).
+        if (resendState !is ResendState.Found && (resendState is ResendState.NotFound || isManualEntryExpanded)) {
+            if (!isManualEntryExpanded) {
+                Text(
+                    text = "Add a link manually",
+                    color = TierWorthYourTime,
+                    style = MaterialTheme.typography.labelSmall,
+                    modifier = Modifier.padding(top = 6.dp).clickable(onClick = onToggleManualEntry)
+                )
+            } else {
+                ManualLinkEntry(
+                    isSubmitting = resendState is ResendState.InFlight,
+                    onSubmit = onSubmitManualLink,
+                    onCancel = onToggleManualEntry
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ManualLinkEntry(isSubmitting: Boolean, onSubmit: (String) -> Unit, onCancel: () -> Unit) {
+    var url by rememberSaveable { mutableStateOf("") }
+    Column(modifier = Modifier.fillMaxWidth().padding(top = 8.dp)) {
+        OutlinedTextField(
+            value = url,
+            onValueChange = { url = it },
+            placeholder = { Text("Paste a YouTube link", style = MaterialTheme.typography.bodySmall) },
+            singleLine = true,
+            enabled = !isSubmitting,
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary,
+                focusedBorderColor = TierWorthYourTime,
+                unfocusedBorderColor = TextMuted
+            )
+        )
+        Row(modifier = Modifier.fillMaxWidth().padding(top = 6.dp), horizontalArrangement = Arrangement.End) {
+            OutlinedButton(onClick = onCancel, enabled = !isSubmitting) { Text("Cancel") }
+            Spacer(modifier = Modifier.width(8.dp))
+            Button(onClick = { onSubmit(url) }, enabled = !isSubmitting && url.isNotBlank()) { Text("Save") }
         }
     }
 }

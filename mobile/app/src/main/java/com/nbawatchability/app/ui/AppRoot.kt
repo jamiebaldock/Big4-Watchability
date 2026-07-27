@@ -279,7 +279,10 @@ fun AppRoot() {
             },
             onBack = { showAdminDashboard = false },
             testPushState = adminViewModel.testPushState,
-            onSendTestPush = adminViewModel::sendTestPush
+            onSendTestPush = adminViewModel::sendTestPush,
+            isManualEntryExpanded = adminViewModel::isManualEntryExpanded,
+            onToggleManualEntry = adminViewModel::toggleManualEntry,
+            onSubmitManualLink = adminViewModel::submitManualHighlight
         )
         return
     }

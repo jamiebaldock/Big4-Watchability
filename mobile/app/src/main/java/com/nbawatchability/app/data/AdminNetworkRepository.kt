@@ -92,6 +92,12 @@ data class TestPushResult(
 )
 
 @Serializable
+private data class SetHighlightRequestBody(val eventId: String, val url: String)
+
+@Serializable
+data class SetHighlightResult(val videoId: String)
+
+@Serializable
 private data class AdminErrorResponse(val error: String? = null)
 
 /** Thrown for a bad/expired token specifically, so the ViewModel can fall back to the PIN screen rather than showing a generic error. */
@@ -129,6 +135,13 @@ object AdminNetworkRepository {
         val response = post("$baseUrl/admin/test-push", body, token)
         json.decodeFromString(TestPushResult.serializer(), response)
     }
+
+    suspend fun setHighlight(baseUrl: String, token: String, eventId: String, url: String): SetHighlightResult =
+        withContext(Dispatchers.IO) {
+            val body = json.encodeToString(SetHighlightRequestBody.serializer(), SetHighlightRequestBody(eventId, url))
+            val response = post("$baseUrl/admin/set-highlight", body, token)
+            json.decodeFromString(SetHighlightResult.serializer(), response)
+        }
 
     private fun get(urlString: String, token: String): String {
         val connection = URL(urlString).openConnection() as HttpURLConnection

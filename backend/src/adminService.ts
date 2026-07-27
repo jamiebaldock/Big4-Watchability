@@ -30,6 +30,7 @@ import {
   recordHighlightsSearchLog,
   recordSearchQuotaSpend,
   setHighlights,
+  setHighlightsFromSeed,
 } from "./gameStore";
 import { getGamesForDateAnySport } from "./httpHandler";
 import { RenderStatus, getRenderStatus } from "./renderClient";
@@ -184,6 +185,71 @@ export async function resendHighlightsSearch(eventId: string): Promise<AdminRese
   }
   recordHighlightsSearchLog(row.eventId, row.leagueGroup, "no_match");
   return { matched: false };
+}
+
+const YOUTUBE_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+/**
+ * Pulls an 11-char YouTube video id out of whatever James pastes - every
+ * real share-link shape (watch/embed/shorts/live, youtu.be, with or
+ * without www/m./music. subdomains, with extra query params like a
+ * timestamp) plus a bare id typed/pasted directly, as a convenience. URL
+ * parsing (not one big regex) so a genuinely malformed paste fails cleanly
+ * instead of silently matching the wrong substring.
+ */
+function extractYoutubeVideoId(input: string): string | null {
+  const trimmed = input.trim();
+  if (YOUTUBE_ID_RE.test(trimmed)) return trimmed;
+
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    return null;
+  }
+
+  const host = url.hostname.replace(/^(www|m|music)\./, "");
+  if (host === "youtu.be") {
+    const id = url.pathname.slice(1).split("/")[0];
+    return YOUTUBE_ID_RE.test(id) ? id : null;
+  }
+  if (host === "youtube.com") {
+    if (url.pathname === "/watch") {
+      const id = url.searchParams.get("v");
+      return id && YOUTUBE_ID_RE.test(id) ? id : null;
+    }
+    const pathMatch = url.pathname.match(/^\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{11})/);
+    if (pathMatch) return pathMatch[1];
+  }
+  return null;
+}
+
+export interface AdminManualHighlightResult {
+  videoId: string;
+}
+
+/**
+ * The Admin page's "no match found -> paste a link myself" fallback -
+ * James manually confirming a video the automated search (searchHighlights
+ * Video, resendHighlightsSearch above) missed. Goes through
+ * setHighlightsFromSeed (highlightsSeed.ts's own manual-match path), not
+ * setHighlights - deliberately doesn't stamp yt_found_at/yt_published_at,
+ * since a human pasting a link seconds after clicking around isn't a real
+ * observation of upload lag and would skew getLagPercentiles' learned
+ * schedule (see setHighlights' own doc comment for the full reasoning).
+ * No search-quota/outcome-log bookkeeping either - this never touches
+ * YouTube's API at all, so there's no real search attempt to log.
+ */
+export function setManualHighlight(eventId: string, url: string): AdminManualHighlightResult {
+  const row = getGame(eventId);
+  if (!row) throw new AdminBadRequestError("no such game");
+  if (row.ytVideoId) throw new AdminBadRequestError("this game already has a highlights link");
+
+  const videoId = extractYoutubeVideoId(url);
+  if (!videoId) throw new AdminBadRequestError("couldn't find a YouTube video ID in that link");
+
+  setHighlightsFromSeed(eventId, videoId);
+  return { videoId };
 }
 
 const TEST_PUSH_LEAGUE_ORDER: LeagueGroup[] = ["nba", "wnba", "mlb", "nfl", "nhl"];

@@ -70,6 +70,15 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     // changes underneath it.
     private val resendStates = mutableStateMapOf<String, ResendState>()
 
+    // Which "no match found" rows currently have their manual-link entry
+    // field expanded - keyed by eventId, same snapshot-map reasoning as
+    // resendStates above. A submission's own in-flight/result state reuses
+    // resendStates itself (ResendState.Found/Failed) rather than a parallel
+    // state type, since the row's success/failure display is identical
+    // either way - "this game now has a highlights link" doesn't need to
+    // know whether the automated search or a manual paste is what set it.
+    private val manualEntryExpanded = mutableStateMapOf<String, Boolean>()
+
     var testPushState: TestPushState? by mutableStateOf(null)
         private set
 
@@ -83,6 +92,12 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun resendStateFor(eventId: String): ResendState? = resendStates[eventId]
+
+    fun isManualEntryExpanded(eventId: String): Boolean = manualEntryExpanded[eventId] == true
+
+    fun toggleManualEntry(eventId: String) {
+        manualEntryExpanded[eventId] = !isManualEntryExpanded(eventId)
+    }
 
     fun submitPin(pin: String) {
         if (isLoggingIn) return
@@ -150,6 +165,31 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
                 if (result.matched) loadDashboard()
             } catch (e: Exception) {
                 resendStates[eventId] = ResendState.Failed(e.message ?: "Search failed")
+            }
+        }
+    }
+
+    /**
+     * The "no match found -> paste a link myself" fallback - submits
+     * straight to setManualHighlight (adminService.ts), which validates the
+     * URL and rejects a game that already has a link, same as the
+     * automated path's own outcome shape (resendStates reused directly).
+     * Collapses the entry field and refreshes the dashboard on success,
+     * same "the missing-games list itself just changed" reasoning
+     * resendHighlights already uses - leaves the field open (so James can
+     * fix a typo and retry) on failure.
+     */
+    fun submitManualHighlight(eventId: String, url: String) {
+        val activeToken = token ?: return
+        resendStates[eventId] = ResendState.InFlight
+        viewModelScope.launch {
+            try {
+                AdminNetworkRepository.setHighlight(BACKEND_BASE_URL, activeToken, eventId, url)
+                resendStates[eventId] = ResendState.Found("Added manually")
+                manualEntryExpanded[eventId] = false
+                loadDashboard()
+            } catch (e: Exception) {
+                resendStates[eventId] = ResendState.Failed(e.message ?: "Couldn't save that link")
             }
         }
     }
