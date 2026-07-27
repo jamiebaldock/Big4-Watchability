@@ -13,6 +13,7 @@ import com.nbawatchability.app.data.FavoritesRepository
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkLeagueContentRepository
 import com.nbawatchability.app.data.Team
+import com.nbawatchability.app.util.FileLogger
 import kotlinx.coroutines.launch
 
 const val MAX_FAVORITE_TEAMS = 5
@@ -86,6 +87,7 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             .mapNotNull { team -> LeagueGroup.entries.find { it.apiValue == team.leagueGroup } }
             .distinct()
         if (leaguesNeedingRepair.isEmpty()) return
+        FileLogger.log("FAVS", "reconcile: ${leaguesNeedingRepair.size} league(s) need repair: ${leaguesNeedingRepair.map { it.apiValue }}")
 
         viewModelScope.launch {
             // Built up locally across every league before persisting once at
@@ -97,13 +99,23 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
             var working = current
             for (leagueGroup in leaguesNeedingRepair) {
                 val realTeams = runCatching { NetworkLeagueContentRepository.teams(BACKEND_BASE_URL, leagueGroup).teams }
+                    .onFailure { FileLogger.logError("FAVS", "reconcile: /teams fetch failed for ${leagueGroup.apiValue}", it) }
                     .getOrNull() ?: continue
                 val byName = realTeams.associateBy { it.name }
                 working = working.map { fav ->
                     if (fav.id.isBlank() && fav.leagueGroup == leagueGroup.apiValue) byName[fav.name] ?: fav else fav
                 }
             }
-            if (working != current) repository.setFavoriteTeams(working)
+            if (working != current) {
+                FileLogger.log("FAVS", "reconcile: writing repaired list (${working.count { it.id.isNotBlank() }}/${working.size} now have ids)")
+                // Best-effort - a failed write here should never crash the app
+                // over a background self-heal pass; the next emission just
+                // retries (blank ids are still blank, so this fires again).
+                runCatching { repository.setFavoriteTeams(working) }
+                    .onFailure { FileLogger.logError("FAVS", "reconcile: setFavoriteTeams failed", it) }
+            } else {
+                FileLogger.log("FAVS", "reconcile: no changes (name match failed or already resolved)")
+            }
         }
     }
 
@@ -129,15 +141,21 @@ class FavoritesViewModel(application: Application) : AndroidViewModel(applicatio
      */
     fun toggleFavoriteTeam(team: Team) {
         val alreadyFavorited = isFavoriteTeam(team.name)
+        FileLogger.log("FAVS", "toggleFavoriteTeam(${team.name}, id=${team.id}, lg=${team.leagueGroup}): alreadyFavorited=$alreadyFavorited, currentCount=${favoriteTeams.size}")
         if (!alreadyFavorited) {
             val countInSameLeague = favoriteTeams.count { it.leagueGroup == team.leagueGroup }
             if (countInSameLeague >= MAX_FAVORITE_TEAMS) {
+                FileLogger.log("FAVS", "toggleFavoriteTeam(${team.name}): BLOCKED, cap reached ($countInSameLeague >= $MAX_FAVORITE_TEAMS)")
                 Toast.makeText(getApplication(), "Up to $MAX_FAVORITE_TEAMS favorite teams per league for now", Toast.LENGTH_SHORT).show()
                 return
             }
         }
         val updated = if (alreadyFavorited) favoriteTeams.filterNot { it.name == team.name } else favoriteTeams + team
-        viewModelScope.launch { repository.setFavoriteTeams(updated) }
+        viewModelScope.launch {
+            runCatching { repository.setFavoriteTeams(updated) }
+                .onSuccess { FileLogger.log("FAVS", "toggleFavoriteTeam(${team.name}): write succeeded, newCount=${updated.size}") }
+                .onFailure { FileLogger.logError("FAVS", "toggleFavoriteTeam(${team.name}): write FAILED", it) }
+        }
     }
 
     /**

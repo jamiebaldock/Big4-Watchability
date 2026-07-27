@@ -261,7 +261,10 @@ fun GameCard(
                         score = game.awayScore.takeIf { showScore },
                         isFavorite = game.away in favoriteTeamNames,
                         showGoatBadge = awayWon,
-                        onLongPress = { onToggleFavoriteTeam(Team(name = game.away, logo = game.awayLogo, leagueGroup = gameLeagueGroup)) }
+                        onLongPress = {
+                            com.nbawatchability.app.util.FileLogger.log("FAVS", "GameCard: long-press fired on away team ${game.away}")
+                            onToggleFavoriteTeam(Team(name = game.away, logo = game.awayLogo, leagueGroup = gameLeagueGroup))
+                        }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     TeamRow(
@@ -270,7 +273,10 @@ fun GameCard(
                         score = game.homeScore.takeIf { showScore },
                         isFavorite = game.home in favoriteTeamNames,
                         showGoatBadge = homeWon,
-                        onLongPress = { onToggleFavoriteTeam(Team(name = game.home, logo = game.homeLogo, leagueGroup = gameLeagueGroup)) }
+                        onLongPress = {
+                            com.nbawatchability.app.util.FileLogger.log("FAVS", "GameCard: long-press fired on home team ${game.home}")
+                            onToggleFavoriteTeam(Team(name = game.home, logo = game.homeLogo, leagueGroup = gameLeagueGroup))
+                        }
                     )
                 }
 
