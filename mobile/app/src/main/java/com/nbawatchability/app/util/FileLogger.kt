@@ -38,12 +38,20 @@ object FileLogger {
     }
 
     fun log(tag: String, message: String) {
+        // logcat first, unconditionally - the disk write below is a nice-
+        // to-have (Drive-synced log for off-device inspection) that can
+        // legitimately fail on newer Android versions' scoped storage even
+        // with the legacy WRITE_EXTERNAL_STORAGE permission granted; it
+        // used to be the other way around, which meant a failed disk write
+        // silently swallowed the logcat line too (jumped straight to catch
+        // before ever reaching Log.d) - every on-device PERF timing this
+        // session had to work around by re-deriving durations from log
+        // timestamps instead of the intended one-line-per-measurement output.
+        Log.d(tag, message)
         try {
             val timestamp = dateFormat.format(Date())
             val line = "[$timestamp] $tag: $message\n"
-
             logFile?.appendText(line)
-            Log.d(tag, message)
         } catch (e: Exception) {
             Log.e("FileLogger", "Failed to write log", e)
         }

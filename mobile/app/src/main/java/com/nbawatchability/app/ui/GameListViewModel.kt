@@ -72,6 +72,16 @@ class GameListViewModel : ViewModel() {
     var selectedDayIndex by mutableStateOf(0)
         private set
 
+    // Incremented on every load() call - the two-phase fetch inside load()
+    // (fast narrow window first, full season second) checks its own
+    // captured token against this before each uiState write, so a slow
+    // background second-phase fetch for a league the user has since
+    // switched AWAY from can never overwrite what a newer load() already
+    // painted. Plain Int, not thread-safety-sensitive - both the write
+    // here and the reads inside load() happen on the same
+    // Dispatchers.Main.immediate viewModelScope.
+    private var loadToken = 0
+
     // Which league(s)' slate is currently loaded - set by load(), reused by
     // refresh()/fetchGamesForLocalDate() so callers don't need to keep
     // threading it through on every pull-to-refresh. More than one entry
@@ -297,6 +307,7 @@ class GameListViewModel : ViewModel() {
         currentLeagueGroups = leagueGroups
         windowCenter = today
         seasonRange = null
+        val token = ++loadToken
         uiState = ScheduleUiState.Loading
 
         val cacheKey = cacheKeyFor(leagueGroups)
@@ -309,30 +320,91 @@ class GameListViewModel : ViewModel() {
             return
         }
 
+        // Two-phase: a fast narrow window first (paints something on
+        // screen in roughly one chunk's worth of latency), then the full
+        // season range - if there is one - streams in behind it and
+        // replaces the view once ready. Cuts cold time-to-first-paint from
+        // "however long the whole multi-chunk season fetch takes" down to
+        // "one narrow-window fetch," which is the dominant remaining cold-
+        // start cost the server/client caching fixes (P1 follow-up,
+        // 2026-07-27) don't address - those only help REPEAT access to
+        // already-fetched date ranges, not a genuinely first-ever fetch.
+        // [token] guards every uiState/selectedDayIndex write below against
+        // a newer load() (the user switched leagues again mid-flight)
+        // having already taken over - without it, this phase's slow
+        // second-half fetch for the OLD league could land after the new
+        // league's own first paint and silently stomp over it.
         viewModelScope.launch {
             val startMs = System.currentTimeMillis()
-            val msg = "GameListViewModel.load START for ${leagueGroups.map { it.displayName }}"
-            com.nbawatchability.app.util.FileLogger.log("PERF", msg)
-            uiState = try {
+            com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load START for ${leagueGroups.map { it.displayName }}")
+            try {
                 val seasonStart = System.currentTimeMillis()
-                seasonRange = leagueGroups.singleOrNull()?.let { NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, it) }
-                val seasonMs = System.currentTimeMillis() - seasonStart
-                com.nbawatchability.app.util.FileLogger.log("PERF", "seasonWindow took ${seasonMs}ms")
+                val range = leagueGroups.singleOrNull()?.let { NetworkGameRepository.seasonWindow(BACKEND_BASE_URL, it) }
+                if (token != loadToken) return@launch
+                seasonRange = range
+                com.nbawatchability.app.util.FileLogger.log("PERF", "seasonWindow took ${System.currentTimeMillis() - seasonStart}ms")
 
-                val scheduleStart = System.currentTimeMillis()
-                val days = fetchSchedule()
-                val scheduleMs = System.currentTimeMillis() - scheduleStart
-                com.nbawatchability.app.util.FileLogger.log("PERF", "fetchSchedule took ${scheduleMs}ms, got ${days.size} days")
+                // Anchored on today if today actually falls within the real
+                // season (the common case - a season currently in
+                // progress), otherwise on the season's own start date -
+                // matching where selectedDayIndex's own
+                // indexOfFirst{...}.coerceAtLeast(0) fallback would land
+                // anyway (e.g. NHL in its summer off-season: today isn't in
+                // range, so the meaningful "first paint" is the season
+                // opener, not an empty today-centered window nobody would
+                // look at before it gets replaced a moment later).
+                val anchor = when {
+                    range == null -> today
+                    today in range.first..range.second -> today
+                    else -> range.first
+                }
+                val narrowStart = anchor.minusDays(DISPLAY_RANGE_DAYS)
+                val narrowEnd = anchor.plusDays(DISPLAY_RANGE_DAYS)
 
-                scheduleCache[cacheKey] = CachedSchedule(System.currentTimeMillis(), days, seasonRange)
+                val narrowStartMs = System.currentTimeMillis()
+                val narrowFetched = fetchScheduleChunked(
+                    narrowStart.minusDays(QUERY_BUFFER_DAYS),
+                    narrowEnd.plusDays(QUERY_BUFFER_DAYS),
+                    leagueGroups
+                )
+                val narrowDays = rebucketByLocalDate(narrowFetched, narrowStart, narrowEnd)
+                com.nbawatchability.app.util.FileLogger.log(
+                    "PERF",
+                    "narrow window fetch took ${System.currentTimeMillis() - narrowStartMs}ms, got ${narrowDays.size} days"
+                )
 
-                selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
-                val totalMs = System.currentTimeMillis() - startMs
-                com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load DONE in ${totalMs}ms")
-                ScheduleUiState.Loaded(days)
+                if (token != loadToken) return@launch
+                selectedDayIndex = narrowDays.indexOfFirst { it.date == anchor }.coerceAtLeast(0)
+                uiState = ScheduleUiState.Loaded(narrowDays)
+                com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load FIRST PAINT in ${System.currentTimeMillis() - startMs}ms")
+
+                // Only worth a second, full fetch if the real season
+                // actually extends past what the narrow window above
+                // already covered - a short season (or no season data at
+                // all) means the narrow fetch already has everything.
+                val needsFullFetch = range != null && (range.first < narrowStart || range.second > narrowEnd)
+                val finalDays = if (needsFullFetch) {
+                    val fullStartMs = System.currentTimeMillis()
+                    val fullDays = fetchSchedule()
+                    com.nbawatchability.app.util.FileLogger.log(
+                        "PERF",
+                        "full season fetch took ${System.currentTimeMillis() - fullStartMs}ms, got ${fullDays.size} days"
+                    )
+                    if (token != loadToken) return@launch
+                    selectedDayIndex = fullDays.indexOfFirst { it.date == anchor }.coerceAtLeast(0)
+                    uiState = ScheduleUiState.Loaded(fullDays)
+                    fullDays
+                } else {
+                    narrowDays
+                }
+
+                scheduleCache[cacheKey] = CachedSchedule(System.currentTimeMillis(), finalDays, seasonRange)
+                com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load DONE in ${System.currentTimeMillis() - startMs}ms")
             } catch (e: Exception) {
-                com.nbawatchability.app.util.FileLogger.logError("PERF", "GameListViewModel.load ERROR", e)
-                ScheduleUiState.Error(e.message ?: "Couldn't reach the backend")
+                if (token == loadToken) {
+                    com.nbawatchability.app.util.FileLogger.logError("PERF", "GameListViewModel.load ERROR", e)
+                    uiState = ScheduleUiState.Error(e.message ?: "Couldn't reach the backend")
+                }
             }
         }
     }
