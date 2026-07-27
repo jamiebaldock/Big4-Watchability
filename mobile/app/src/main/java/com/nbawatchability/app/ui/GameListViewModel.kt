@@ -44,6 +44,18 @@ private const val QUERY_BUFFER_DAYS = 2L
 // with a full season range loaded.
 private const val MAX_FETCH_CHUNK_DAYS = 21L
 
+// How long a same-session league switch-back can reuse the in-memory
+// scheduleCache before treating it as stale and re-fetching - long enough
+// that rapid tab-flipping (checking a couple of leagues, coming back) feels
+// instant, short enough that a live game's score/status can't go more than
+// a minute out of date if the user lands back on it. Games/Starred's own
+// ON_RESUME refresh already covers the currently-viewed league; this only
+// governs a league the user switched AWAY from and back TO.
+private const val SWITCH_CACHE_TTL_MS = 60_000L
+
+private fun cacheKeyFor(leagueGroups: List<LeagueGroup>): String =
+    leagueGroups.map { it.apiValue }.sorted().joinToString(",")
+
 class GameListViewModel : ViewModel() {
 
     val today: LocalDate = LocalDate.now()
@@ -75,6 +87,28 @@ class GameListViewModel : ViewModel() {
     // for "Yesterday"/"Today"/"Tomorrow" labeling regardless of where the
     // window is currently centered.
     private var windowCenter: LocalDate = today
+
+    // In-memory, per-ViewModel-instance cache of a full fetchSchedule() result,
+    // keyed by the exact leagueGroups list this tab was loaded with - lets
+    // switching away to a different league and back within the same session
+    // skip the network entirely instead of re-running the whole
+    // seasonWindow+chunked-fetch pipeline again. Bounded by
+    // SWITCH_CACHE_TTL_MS rather than kept forever: a league with a live
+    // game in progress needs a switch-back to still pick up real score/
+    // status changes reasonably soon, not show an arbitrarily stale
+    // snapshot from earlier in the session. Deliberately NOT persisted
+    // across process death/ViewModel recreation - this is purely a same-
+    // session "don't redo work you just did" cache, not a replacement for
+    // the backend's own longer-lived per-date cache (httpHandler.ts's
+    // scheduleDay cache), which is what actually saves real ESPN-fetch
+    // work on a cold switch.
+    private val scheduleCache = mutableMapOf<String, CachedSchedule>()
+
+    private data class CachedSchedule(
+        val fetchedAtMs: Long,
+        val days: List<DayGames>,
+        val seasonRange: Pair<LocalDate, LocalDate>?
+    )
 
     // The real start-of-season through latest-known-date range, whenever the
     // backend can derive one - null falls back to the fixed
@@ -264,6 +298,17 @@ class GameListViewModel : ViewModel() {
         windowCenter = today
         seasonRange = null
         uiState = ScheduleUiState.Loading
+
+        val cacheKey = cacheKeyFor(leagueGroups)
+        val cached = scheduleCache[cacheKey]
+        if (cached != null && System.currentTimeMillis() - cached.fetchedAtMs < SWITCH_CACHE_TTL_MS) {
+            com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load: same-session cache hit for $cacheKey, skipping network entirely")
+            seasonRange = cached.seasonRange
+            selectedDayIndex = cached.days.indexOfFirst { it.date == today }.coerceAtLeast(0)
+            uiState = ScheduleUiState.Loaded(cached.days)
+            return
+        }
+
         viewModelScope.launch {
             val startMs = System.currentTimeMillis()
             val msg = "GameListViewModel.load START for ${leagueGroups.map { it.displayName }}"
@@ -278,6 +323,8 @@ class GameListViewModel : ViewModel() {
                 val days = fetchSchedule()
                 val scheduleMs = System.currentTimeMillis() - scheduleStart
                 com.nbawatchability.app.util.FileLogger.log("PERF", "fetchSchedule took ${scheduleMs}ms, got ${days.size} days")
+
+                scheduleCache[cacheKey] = CachedSchedule(System.currentTimeMillis(), days, seasonRange)
 
                 selectedDayIndex = days.indexOfFirst { it.date == today }.coerceAtLeast(0)
                 val totalMs = System.currentTimeMillis() - startMs
@@ -401,6 +448,7 @@ class GameListViewModel : ViewModel() {
         try {
             if (seasonRange == null) windowCenter = date
             val days = fetchSchedule()
+            scheduleCache[cacheKeyFor(currentLeagueGroups)] = CachedSchedule(System.currentTimeMillis(), days, seasonRange)
             selectedDayIndex = days.indexOfFirst { it.date == date }.coerceAtLeast(0)
             uiState = ScheduleUiState.Loaded(days)
         } catch (e: Exception) {
@@ -431,6 +479,15 @@ class GameListViewModel : ViewModel() {
                     if (day.date == targetDate) day.copy(games = refreshedGames) else day
                 }
                 uiState = ScheduleUiState.Loaded(updatedDays)
+                // Keep the same-session switch-cache in sync with this
+                // day's refreshed data - otherwise a switch-away-and-back
+                // within SWITCH_CACHE_TTL_MS would serve the pre-refresh
+                // snapshot instead. fetchedAtMs deliberately untouched:
+                // only this one day was actually re-fetched, not the whole
+                // cached range, so the entry's overall TTL clock shouldn't
+                // reset as if everything in it were fresh.
+                val cacheKey = cacheKeyFor(currentLeagueGroups)
+                scheduleCache[cacheKey]?.let { scheduleCache[cacheKey] = it.copy(days = updatedDays) }
             } catch (e: Exception) {
                 // Swallow it: keep showing whatever was already loaded, the
                 // spinner stopping is signal enough that it didn't land.
