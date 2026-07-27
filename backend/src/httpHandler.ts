@@ -3,6 +3,7 @@ import { earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
 import { getGameDetail } from "./gameDetailService";
 import { getGamesForDate, getNextScheduledDate, getTeamSchedule } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
+import { loadLeagueCache, saveLeagueCache } from "./leagueCache";
 import { getNews } from "./newsService";
 import { getSeasonWindow, SeasonWindow } from "./seasonWindowService";
 import { getMlbGamesForDate, getMlbTeamSchedule, getNextMlbScheduledDate, isMlbLeagueGroup } from "./mlbGamesService";
@@ -48,19 +49,62 @@ function parseLeagueGroup(raw: string): LeagueGroup {
   throw new BadRequestError('leagueGroup must be one of "nba", "wnba", "mlb", "nfl", "nhl"');
 }
 
+// A date this many days (or more) before today is guaranteed over in every
+// timezone a game could have been played in - matches the same 2-day
+// buffer GameListViewModel.kt's own QUERY_BUFFER_DAYS already uses for
+// exactly this "ESPN's US-Eastern bucketing vs. the viewer's local date"
+// slack. A date this old will never again change in ESPN's own scoreboard
+// response (every game on it is final, forever), so it's safe to cache
+// permanently - "today" and future dates are deliberately never cached
+// here, since those are exactly the ones whose games are still live,
+// upcoming, or newly-added.
+const SAFELY_PAST_DAYS = 2;
+
+function isSafelyPastDate(dateYyyyMmDd: string): boolean {
+  const cutoff = new Date();
+  cutoff.setUTCDate(cutoff.getUTCDate() - SAFELY_PAST_DAYS);
+  return dateYyyyMmDd < cutoff.toISOString().slice(0, 10);
+}
+
 /**
  * Dispatches to the basketball, MLB, NFL, or NHL live-schedule pipeline
  * (types.ts's SPORT_FOR_LEAGUE_GROUP) - the one choke point where a
  * request's leagueGroup decides which sport's data layer actually runs.
  * Exported for alertsPoller.ts (phase 4), which needs the same live-game
  * data this module's own /schedule route serves, just without going through
- * an HTTP request.
+ * an HTTP request (always for today/recent dates, so it never hits the
+ * cache branch below).
+ *
+ * Permanently caches a safely-past date's result to disk (leagueCache.ts's
+ * same file-cache primitives, keyed by the game date itself rather than
+ * "today" - unlike every other user of that cache, this one never expires,
+ * since a finished date's result is immutable). Root cause of the P1
+ * follow-up investigation (2026-07-27): every one of espnClient.ts's/
+ * nhlEspnClient.ts's/etc. own scoreboard-fetch functions hit ESPN fresh on
+ * every single call with zero caching at any layer, even for a date 9+
+ * months in the past that will never change again - confirmed directly (no
+ * cache check anywhere in the call chain down to the raw fetch()). A
+ * full-season chunked fetch is mostly historical dates, so this turns the
+ * large majority of a season's per-date work into a local file read after
+ * the first time anyone (any user, any request) asks for that date.
  */
-export function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
-  if (isMlbLeagueGroup(leagueGroup)) return getMlbGamesForDate(date);
-  if (isNflLeagueGroup(leagueGroup)) return getNflGamesForDate(date);
-  if (isNhlLeagueGroup(leagueGroup)) return getNhlGamesForDate(date);
-  return getGamesForDate(date, leagueGroup);
+export async function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
+  const cacheable = isSafelyPastDate(date);
+  if (cacheable) {
+    const cached = loadLeagueCache<GameJson[]>("scheduleDay", leagueGroup, date);
+    if (cached) return cached;
+  }
+
+  const games = await (isMlbLeagueGroup(leagueGroup)
+    ? getMlbGamesForDate(date)
+    : isNflLeagueGroup(leagueGroup)
+      ? getNflGamesForDate(date)
+      : isNhlLeagueGroup(leagueGroup)
+        ? getNhlGamesForDate(date)
+        : getGamesForDate(date, leagueGroup));
+
+  if (cacheable) saveLeagueCache("scheduleDay", leagueGroup, date, games);
+  return games;
 }
 
 /**
