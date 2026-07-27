@@ -1082,13 +1082,7 @@ private fun ComingSoonTab(
 
 @Composable
 private fun LoadingScreen() {
-    Column(
-        modifier = Modifier.fillMaxSize(),
-        verticalArrangement = Arrangement.Center,
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        CircularProgressIndicator()
-    }
+    LoadingIndicator()
 }
 
 @Composable
