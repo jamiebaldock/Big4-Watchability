@@ -1061,10 +1061,22 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * preseason, etc.) actually lands in that gap - and it never triggers for
  * NBA today, since NBA's newest label ("2025-26") started *before* its own
  * Finals ended, not after.
+ *
+ * status='final' is required (not just any row with a tipoff_utc) - without
+ * it, a future season's already-*scheduled* games (upserted as soon as
+ * anyone's Games tab touches that date range, well before they're actually
+ * played) satisfy hasRealGapGames purely because they have a real tipoff
+ * timestamp, even though nothing real has happened yet. Confirmed live: NHL
+ * showed a redundant "2026-27" chip alongside "This season" - both empty -
+ * because its own already-released preseason schedule (Sept 19-26, 2026)
+ * had been fetched as upcoming rows, which this check was treating as if
+ * they were completed games. The gap-games check is specifically about
+ * something real having *already happened* (a played Commissioner's Cup
+ * final, actual preseason games), not merely being on the calendar.
  */
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
   const rows = db
-    .prepare(`SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%'`)
+    .prepare(`SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%' AND status = 'final'`)
     .all(leagueGroup) as {
     tipoff_utc: string;
   }[];
