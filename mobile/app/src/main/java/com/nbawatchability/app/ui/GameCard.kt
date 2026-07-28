@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.NotificationsNone
 import androidx.compose.material.icons.filled.PlayCircleFilled
@@ -110,6 +111,12 @@ fun GameCard(
     isBelled: Boolean = false,
     onToggleBell: () -> Unit = {},
     onWatchHighlights: (String) -> Unit = {},
+    // History tab only: lets James paste a YouTube link directly onto a
+    // final game missing one, instead of going through Admin's own missing-
+    // highlights list. Null everywhere else - the row only renders when both
+    // this is non-null AND the game actually has no link yet, so no other
+    // tab needs to pass anything to keep its current (no affordance) look.
+    onAddHighlightLink: ((String) -> Unit)? = null,
     // Only meaningful on the Starred tab, which combines games from many
     // different dates in one list - elsewhere the day-tab context already
     // makes the date obvious, so this defaults off.
@@ -331,6 +338,14 @@ fun GameCard(
                 if (game.status == GameStatus.FINAL && game.youtubeVideoId != null) {
                     HighlightsRow(
                         onClick = { onWatchHighlights(game.youtubeVideoId) },
+                        modifier = Modifier.padding(top = 10.dp)
+                    )
+                } else if (game.status == GameStatus.FINAL && game.youtubeVideoId == null &&
+                    onAddHighlightLink != null && game.eventId != null
+                ) {
+                    val gameEventId = game.eventId
+                    AddHighlightLinkRow(
+                        onClick = { onAddHighlightLink(gameEventId) },
                         modifier = Modifier.padding(top = 10.dp)
                     )
                 }
@@ -640,6 +655,31 @@ private fun HighlightsRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.width(6.dp))
         Text(
             text = "· Spoiler alert",
+            color = TextMuted,
+            style = MaterialTheme.typography.bodySmall
+        )
+    }
+}
+
+// History tab's own "no automated match -> paste one myself" affordance -
+// deliberately muted (TextMuted, no bold) rather than styled like
+// HighlightsRow above, so it reads as a minor admin utility rather than a
+// real user-facing feature promising every game gets a link eventually.
+@Composable
+private fun AddHighlightLinkRow(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        modifier = modifier.clickable(onClick = onClick)
+    ) {
+        Icon(
+            imageVector = Icons.Default.Link,
+            contentDescription = null,
+            tint = TextMuted,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            text = "Add highlights link",
             color = TextMuted,
             style = MaterialTheme.typography.bodySmall
         )

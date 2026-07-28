@@ -188,6 +188,32 @@ class HistoryViewModel : ViewModel() {
     }
 
     fun retry() = load(leagueGroups, selectedPreset)
+
+    /**
+     * Patches a single game's highlights link in place after a manual add
+     * via HistoryScreen's own AddHighlightLinkDialog - avoids a full
+     * network refetch just to flip one field. Updates every cached preset
+     * containing this game (the same eventId can be cached under both "This
+     * season" and "All time" at once, or under more than one named season
+     * boundary edge case) so switching presets afterward doesn't show a
+     * stale "Add highlights link" row for a game that just got one, plus
+     * the live [uiState] if it's currently showing this game.
+     */
+    fun patchHighlight(eventId: String, videoId: String) {
+        for (key in cache.keys.toList()) {
+            val games = cache[key] ?: continue
+            val idx = games.indexOfFirst { it.eventId == eventId }
+            if (idx >= 0) {
+                cache[key] = games.toMutableList().apply { this[idx] = this[idx].copy(youtubeVideoId = videoId) }
+            }
+        }
+        val current = uiState
+        if (current is HistoryUiState.Loaded) {
+            uiState = HistoryUiState.Loaded(
+                current.games.map { if (it.eventId == eventId) it.copy(youtubeVideoId = videoId) else it }
+            )
+        }
+    }
 }
 
 private suspend fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> =

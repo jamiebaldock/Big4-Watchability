@@ -874,6 +874,12 @@ private fun HistoryTab(
     onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
     val viewModel: HistoryViewModel = viewModel()
+    // Same shared instance AppRoot's own top-level adminViewModel is
+    // (viewModel() resolves against the nearest ViewModelStoreOwner, which
+    // is this single Activity - there's no nested NavHost scoping anything
+    // narrower) - a PIN entered from AddHighlightLinkDialog unlocks the same
+    // session the hidden Admin page uses, not a second independent one.
+    val adminViewModel: AdminViewModel = viewModel()
     val leagueGroups = if (isAllLeaguesSelected) {
         LeagueGroup.entries.filter { it in enabledLeagues && it.isSupported }
     } else {
@@ -922,7 +928,13 @@ private fun HistoryTab(
         showScoresByDefault = showScoresByDefault,
         onGameClick = onGameClick,
         belledGameIds = belledGameIds,
-        onToggleBell = onToggleBell
+        onToggleBell = onToggleBell,
+        isAdminLoggedIn = adminViewModel.token != null,
+        isAdminLoggingIn = adminViewModel.isLoggingIn,
+        adminLoginError = adminViewModel.loginError,
+        onSubmitAdminPin = adminViewModel::submitPin,
+        onAddHighlightLink = adminViewModel::submitManualHighlightFromHistory,
+        onHighlightLinkAdded = viewModel::patchHighlight
     )
 }
 

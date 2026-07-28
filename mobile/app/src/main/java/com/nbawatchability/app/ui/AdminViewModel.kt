@@ -195,6 +195,35 @@ class AdminViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     /**
+     * History tile's own "paste a link" entry point (AddHighlightLinkDialog)
+     * - same setHighlight call and validation as submitManualHighlight
+     * above, but reports success/failure straight back to the caller via
+     * explicit callbacks instead of writing into resendStates/
+     * manualEntryExpanded (Admin-dashboard-only state History has no use
+     * for) or refreshing Admin's own missing-games list. Reuses this
+     * ViewModel's token/login state directly, so a PIN entered from a
+     * History tile also unlocks Admin proper and vice versa - there's only
+     * ever one admin session, not a separate one per entry point.
+     */
+    fun submitManualHighlightFromHistory(eventId: String, url: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) {
+        val activeToken = token ?: run {
+            onError("Not logged in")
+            return
+        }
+        viewModelScope.launch {
+            try {
+                val result = AdminNetworkRepository.setHighlight(BACKEND_BASE_URL, activeToken, eventId, url)
+                onSuccess(result.videoId)
+            } catch (e: AdminUnauthorizedException) {
+                authRepository.clearToken()
+                onError("Session expired - try again")
+            } catch (e: Exception) {
+                onError(e.message ?: "Couldn't save that link")
+            }
+        }
+    }
+
+    /**
      * Sends a real push (via alertsPoller.ts's exact same payload shape) to
      * this device's own registered token, targeting whatever real game the
      * backend picks for today - lets James verify the full tap -> deep-link

@@ -22,6 +22,8 @@ import {
   canSpendSearchQuota,
   getFinalGamesMissingHighlights,
   getFinalMlbGamesMissingHighlights,
+  getFinalNflGamesMissingHighlights,
+  getFinalNhlGamesMissingHighlights,
   getGame,
   getLagPercentiles,
   getSearchBudgetHistory,
@@ -133,9 +135,21 @@ function toAdminRow(row: GameRow): AdminMissingHighlightsGame {
   };
 }
 
-/** Every currently-missing recent game across every league with live search - newest first, same as the underlying gameStore queries. */
+/**
+ * Every currently-missing recent game across every league - newest first.
+ * Includes NFL/NHL alongside NBA/WNBA/MLB even though NFL/NHL's own
+ * automated search poller isn't wired in yet (see getAdminStats' own
+ * lagPercentiles comment) - manual entry (setManualHighlight below) doesn't
+ * depend on that poller at all, so there's no reason to hide these rows from
+ * James just because the automated path hasn't been turned on for them yet.
+ */
 export function getAdminMissingHighlights(): AdminMissingHighlightsGame[] {
-  return [...getFinalGamesMissingHighlights(), ...getFinalMlbGamesMissingHighlights()]
+  return [
+    ...getFinalGamesMissingHighlights(),
+    ...getFinalMlbGamesMissingHighlights(),
+    ...getFinalNflGamesMissingHighlights(),
+    ...getFinalNhlGamesMissingHighlights(),
+  ]
     .sort((a, b) => (a.tipoffUtc < b.tipoffUtc ? 1 : -1))
     .map(toAdminRow);
 }

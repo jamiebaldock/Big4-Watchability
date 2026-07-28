@@ -150,7 +150,19 @@ fun HistoryScreen(
     onGameClick: (Game) -> Unit = {},
     onPrefetch: (HistoryRangePreset) -> Unit = {},
     belledGameIds: Set<String> = emptySet(),
-    onToggleBell: (Game) -> Unit = {}
+    onToggleBell: (Game) -> Unit = {},
+    // The "Add highlights link" tile affordance (AddHighlightLinkRow in
+    // GameCard) - reuses AdminViewModel's own login/token state (same PIN as
+    // the hidden Admin page) rather than a separate auth flow, so unlocking
+    // here also unlocks Admin proper and vice versa. onAddHighlightLink's
+    // callback shape mirrors AdminViewModel.submitManualHighlightFromHistory
+    // exactly - AddHighlightLinkDialog is the only thing that calls it.
+    isAdminLoggedIn: Boolean = false,
+    isAdminLoggingIn: Boolean = false,
+    adminLoginError: String? = null,
+    onSubmitAdminPin: (String) -> Unit = {},
+    onAddHighlightLink: (eventId: String, url: String, onSuccess: (String) -> Unit, onError: (String) -> Unit) -> Unit = { _, _, _, _ -> },
+    onHighlightLinkAdded: (eventId: String, videoId: String) -> Unit = { _, _ -> }
 ) {
     // Plain remember (not rememberSaveable) - resets to showScoresByDefault
     // every time this composable enters composition, e.g. switching back to
@@ -163,6 +175,11 @@ fun HistoryScreen(
     // tab's own "most watchable first" framing.
     var sortOption by rememberSaveable { mutableStateOf(SortOption.RATING_HIGHEST_FIRST) }
     var actionLabel by remember { mutableStateOf<String?>(null) }
+    // Which game's "Add highlights link" dialog is open, if any - plain
+    // remember (not rememberSaveable), same reasoning as showScore above:
+    // an in-progress paste is fine to lose on a config change/tab switch,
+    // it's not meant to survive one.
+    var pendingHighlightEventId by remember { mutableStateOf<String?>(null) }
 
     // Same settledPage/selectedPreset two-way sync as DayTabsScreen's day
     // pager - settledPage (not currentPage) drives the push-to-caller side
@@ -373,6 +390,7 @@ fun HistoryScreen(
                                     isBelled = game.eventId != null && belledGameIds.contains(game.eventId),
                                     onToggleBell = { onToggleBell(game) },
                                     onWatchHighlights = onWatchHighlights,
+                                    onAddHighlightLink = { pendingHighlightEventId = it },
                                     showDate = true,
                                     spoilerFree = false,
                                     showScore = showScore,
@@ -394,6 +412,22 @@ fun HistoryScreen(
             label = actionLabel,
             modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
         )
+        val pendingId = pendingHighlightEventId
+        if (pendingId != null) {
+            AddHighlightLinkDialog(
+                isLoggedIn = isAdminLoggedIn,
+                isLoggingIn = isAdminLoggingIn,
+                loginError = adminLoginError,
+                onSubmitPin = onSubmitAdminPin,
+                onSubmitLink = { url, onSuccess, onError -> onAddHighlightLink(pendingId, url, onSuccess, onError) },
+                onLinkSaved = { videoId ->
+                    onHighlightLinkAdded(pendingId, videoId)
+                    actionLabel = "Highlights link added"
+                    pendingHighlightEventId = null
+                },
+                onDismiss = { pendingHighlightEventId = null }
+            )
+        }
         }
     }
 }
