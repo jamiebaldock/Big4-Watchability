@@ -70,7 +70,11 @@ private const val ALL_TIME_MIN_SCORE_NBA = 90
 private const val ALL_TIME_MIN_SCORE_WNBA = 75
 
 // Random pick shown when a preset/date range has nothing qualifying - one of
-// several instead of always the same sentence, purely for flavor.
+// several instead of always the same sentence, purely for flavor. Overridden
+// for "This season" on NBA/NHL/MLB by thisSeasonStartMessage below, whenever
+// that's empty specifically because the next season just hasn't started yet
+// (the joke lines read as unhelpful noise in that exact situation - the real
+// answer is "it hasn't started," not "nothing good happened").
 private val EMPTY_HISTORY_LINES = listOf(
     "No barn burners in this range",
     "Nothing but duds as far as the eye can see",
@@ -80,6 +84,23 @@ private val EMPTY_HISTORY_LINES = listOf(
     "Not a single classic hiding in here",
     "This stretch is criminally boring"
 )
+
+// Real, known start dates for each league's *next* season, shown only on
+// "This season" when it's empty (i.e. currently in the gap between one
+// season ending and the next beginning). Regular-season dates below are
+// each league's own official announcement as of 2026-07-28; preseason dates
+// are the best real estimate where the league hasn't put out its own
+// preseason schedule yet (NBA) - phrased as "early October" rather than a
+// specific day for that reason. These are real dates, not placeholders -
+// update them once each league announces its following season, the same
+// way backfillRawStatsNfl2024.ts/backfillRawStatsNhl2024.ts's own SEASON_WINDOW
+// constants need a fresh value every year rather than being computed.
+private fun thisSeasonStartMessage(league: LeagueGroup): String? = when (league) {
+    LeagueGroup.NBA -> "The next NBA season hasn't tipped off yet - preseason games start in early October, with the regular season opening October 20, 2026."
+    LeagueGroup.NHL -> "The next NHL season hasn't dropped the puck yet - preseason starts September 19, with the regular season opening September 29, 2026."
+    LeagueGroup.MLB -> "The next MLB season hasn't started yet - Spring Training is expected to begin in mid-February 2027, with Opening Day set for March 24, 2027."
+    else -> null
+}
 
 /**
  * "Which old games are actually worth going back to watch" - surfaces the
@@ -318,17 +339,27 @@ fun HistoryScreen(
 
                     if (displayGames.isEmpty()) {
                         val earliestText = earliestDate?.format(earliestDateFormatter)
+                        // Only meaningful for "This season" - a named season or
+                        // "All time" being empty has nothing to do with whether
+                        // the *next* season has started, so those keep the
+                        // plain joke line below regardless of league.
+                        val seasonStartMessage = if (selectedPreset is HistoryRangePreset.ThisSeason) {
+                            thisSeasonStartMessage(selectedLeague)
+                        } else {
+                            null
+                        }
                         // Re-picked whenever the preset changes (not on every
                         // recomposition) so it doesn't flicker between jokes
-                        // while this same empty state stays on screen.
-                        val emptyStateLine = remember(selectedPreset) { EMPTY_HISTORY_LINES.random() }
+                        // while this same empty state stays on screen. Only
+                        // actually shown when seasonStartMessage is null.
+                        val jokeLine = remember(selectedPreset) { EMPTY_HISTORY_LINES.random() }
                         Column(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.Center
                         ) {
                             Text(
-                                text = emptyStateLine +
-                                    (if (earliestText != null) " - data goes back to $earliestText, try a wider one." else "."),
+                                text = seasonStartMessage
+                                    ?: (jokeLine + (if (earliestText != null) " - data goes back to $earliestText, try a wider one." else ".")),
                                 color = TextSecondary,
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.fillMaxWidth().padding(24.dp),
