@@ -387,7 +387,10 @@ export function migrateHistoricalBackfill(): void {
   const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
   const mlbCount = migrateMlbFile("mlbRawStats.json");
-  const nflCount = migrateNflFile("nflRawStats.json");
+  // 2025 and 2024 are two separate files/completedDates-resume-state (see
+  // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
+  // same NFL migration function, just called twice.
+  const nflCount = migrateNflFile("nflRawStats.json") + migrateNflFile("nflRawStats2024.json");
   const nhlCount = migrateNhlFile("nhlRawStats.json");
   console.log(
     `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore.`
