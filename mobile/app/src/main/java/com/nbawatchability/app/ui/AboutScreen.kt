@@ -193,8 +193,14 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
             )
             AboutExpandableItem(
                 title = "History",
-                body = "History is the full past-games archive for a league, sortable by date or by " +
-                    "score. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
+                body = "History is a curated past-games archive for a league, sortable by date or by " +
+                    "score - it only surfaces games that scored high enough to be worth revisiting, " +
+                    "not every game played. That's a stricter bar than the tier badges shown elsewhere, " +
+                    "so an occasional \"Worth Your Time\" game might not make the cut here.\n\n" +
+                    "🔥 All time holds itself to a much higher bar again - it's meant to be " +
+                    "the best games that league has ever recorded, not just a good one, so a game can " +
+                    "clear the regular History cutoff for its season and still not make the All-time " +
+                    "cut. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
                     "reveal it, or flip the default in Settings."
             )
             AboutExpandableItem(
