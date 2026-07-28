@@ -231,21 +231,25 @@ private suspend fun dateRangeFor(preset: HistoryRangePreset, today: LocalDate, l
         is HistoryRangePreset.AllTime -> LocalDate.of(2000, 1, 1) to today
     }
 
-// Matches gameStore.ts's seasonLabelForTipoff: NBA's "2024-25" runs Oct 1
-// (the label's start year) through Sep 30 the following year; WNBA's is
-// just the plain calendar year, since a WNBA season never crosses a year
-// boundary; NFL's is a plain single-year label like WNBA's (not hyphenated)
-// but DOES cross the year boundary the way NBA's does - a "2025" season's
-// real games run Sept 2025 - Feb 2026, so it needs its own September
-// cutover rather than either the WNBA or the generic Oct-1 branch. Before
-// this branch existed, NFL fell into the generic Oct-1 case below, which
-// silently excluded every real September game from that season's own
-// chip - confirmed against live data (7 real September 2025 games missing
-// from the "2025" chip). The server clamps the end date to today if it's
-// in the future (e.g. the still-forming current season), so passing each
-// season's nominal end here is always safe.
+// Matches gameStore.ts's seasonLabelForTipoff: NBA/NHL's "2024-25" runs Oct 1
+// (the label's start year) through Sep 30 the following year; WNBA and MLB
+// are both just the plain calendar year, since neither ever crosses a year
+// boundary (WNBA's own season, and MLB's Spring Training-through-World-Series
+// span, both sit entirely within one calendar year) - MLB fell into the
+// generic Oct-1/hyphenated-label case below until 2026-07-29 (confirmed live:
+// MLB games were being labeled "2024-25"/"2025-26" instead of "2024"/"2025"),
+// the same class of bug NFL's own branch below was added to fix. NFL's is a
+// plain single-year label like WNBA/MLB's (not hyphenated) but DOES cross the
+// year boundary the way NBA's does - a "2025" season's real games run Sept
+// 2025 - Feb 2026, so it needs its own September cutover rather than either
+// the WNBA/MLB or the generic Oct-1 branch. Before this branch existed, NFL
+// fell into the generic Oct-1 case below, which silently excluded every real
+// September game from that season's own chip - confirmed against live data
+// (7 real September 2025 games missing from the "2025" chip). The server
+// clamps the end date to today if it's in the future (e.g. the still-forming
+// current season), so passing each season's nominal end here is always safe.
 private fun seasonDateRange(label: String, leagueGroup: LeagueGroup): Pair<LocalDate, LocalDate> {
-    if (leagueGroup == LeagueGroup.WNBA) {
+    if (leagueGroup == LeagueGroup.WNBA || leagueGroup == LeagueGroup.MLB) {
         val year = label.toInt()
         return LocalDate.of(year, 1, 1) to LocalDate.of(year, 12, 31)
     }

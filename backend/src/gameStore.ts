@@ -986,7 +986,10 @@ export function getMostRecentFinalsEnd(leagueGroup: LeagueGroup): string | undef
 // Finals-end year are the same and the next season needs +1.
 function upcomingSeasonLabel(finalsEndTipoff: string, leagueGroup: LeagueGroup): string {
   const finalsYear = new Date(finalsEndTipoff).getUTCFullYear();
-  if (leagueGroup === "wnba") return String(finalsYear + 1);
+  // WNBA and MLB both plain-year, both label the *next* calendar year once
+  // this year's championship (WNBA Finals / World Series) has concluded -
+  // neither ever crosses a year boundary the way NBA/NHL/NFL do.
+  if (leagueGroup === "wnba" || leagueGroup === "mlb") return String(finalsYear + 1);
   if (leagueGroup === "nfl") return String(finalsYear);
   return `${finalsYear}-${String((finalsYear + 1) % 100).padStart(2, "0")}`;
 }
@@ -1015,7 +1018,13 @@ export function seasonLabelForTipoff(
   }
   const date = new Date(tipoffUtc);
   const year = date.getUTCFullYear();
-  if (leagueGroup === "wnba") return String(year);
+  // MLB, like WNBA, never spans a year boundary (Feb/Mar Spring Training
+  // through the World Series in Oct/Nov, all one calendar year) - the tipoff's
+  // own UTC year is the whole label, not the NBA/NHL-style hyphenated
+  // cross-year label the generic branch below falls through to for anything
+  // not explicitly called out. Confirmed as a real bug 2026-07-29: MLB games
+  // were getting labeled "2024-25"/"2025-26" instead of "2024"/"2025".
+  if (leagueGroup === "wnba" || leagueGroup === "mlb") return String(year);
   // NFL: single-year label like WNBA (not hyphenated), but the season DOES
   // cross the year boundary the way NBA's does (a "2025" season's real
   // games run Sept 2025 - Feb 2026) - September (real regular-season start
@@ -1028,11 +1037,11 @@ export function seasonLabelForTipoff(
 }
 
 // The nominal start date a seasonLabelForTipoff-style label itself begins
-// on - the inverse of that function's own math (WNBA: Jan 1 of the label's
-// year; NBA: Oct 1 of the label's start year; NFL: Sept 1 of the label's
-// year, matching seasonLabelForTipoff's own September cutover).
+// on - the inverse of that function's own math (WNBA/MLB: Jan 1 of the
+// label's year; NBA/NHL: Oct 1 of the label's start year; NFL: Sept 1 of the
+// label's year, matching seasonLabelForTipoff's own September cutover).
 function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): string {
-  if (leagueGroup === "wnba") return `${label}-01-01T00:00:00.000Z`;
+  if (leagueGroup === "wnba" || leagueGroup === "mlb") return `${label}-01-01T00:00:00.000Z`;
   if (leagueGroup === "nfl") return `${label}-09-01T00:00:00.000Z`;
   const startYear = label.slice(0, 4);
   return `${startYear}-10-01T00:00:00.000Z`;
