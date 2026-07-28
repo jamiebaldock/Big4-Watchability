@@ -87,18 +87,19 @@ private val EMPTY_HISTORY_LINES = listOf(
 
 // Real, known start dates for each league's *next* season, shown only on
 // "This season" when it's empty (i.e. currently in the gap between one
-// season ending and the next beginning). Regular-season dates below are
-// each league's own official announcement as of 2026-07-28; preseason dates
-// are the best real estimate where the league hasn't put out its own
-// preseason schedule yet (NBA) - phrased as "early October" rather than a
-// specific day for that reason. These are real dates, not placeholders -
-// update them once each league announces its following season, the same
-// way backfillRawStatsNfl2024.ts/backfillRawStatsNhl2024.ts's own SEASON_WINDOW
-// constants need a fresh value every year rather than being computed.
+// season ending and the next beginning) - NBA, NHL, and NFL specifically
+// (not MLB/WNBA, per James's ask). Regular-season/preseason dates below are
+// each league's own official announcement as of 2026-07-28, except NBA's
+// preseason (not yet released as of this writing - phrased as "early
+// October" rather than a specific day for that reason). These are real
+// dates, not placeholders - update them once each league announces its
+// following season, the same way backfillRawStatsNfl2024.ts/
+// backfillRawStatsNhl2024.ts's own SEASON_WINDOW constants need a fresh
+// value every year rather than being computed.
 private fun thisSeasonStartMessage(league: LeagueGroup): String? = when (league) {
     LeagueGroup.NBA -> "The next NBA season hasn't tipped off yet - preseason games start in early October, with the regular season opening October 20, 2026."
     LeagueGroup.NHL -> "The next NHL season hasn't dropped the puck yet - preseason starts September 19, with the regular season opening September 29, 2026."
-    LeagueGroup.MLB -> "The next MLB season hasn't started yet - Spring Training is expected to begin in mid-February 2027, with Opening Day set for March 24, 2027."
+    LeagueGroup.NFL -> "The next NFL season hasn't kicked off yet - preseason begins August 6 with the Hall of Fame Game, and the regular season opens September 9, 2026."
     else -> null
 }
 
