@@ -200,7 +200,10 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                     "🔥 All time holds itself to a much higher bar again - it's meant to be " +
                     "the best games that league has ever recorded, not just a good one, so a game can " +
                     "clear the regular History cutoff for its season and still not make the All-time " +
-                    "cut. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
+                    "cut. For NBA, All time also reaches back further than the season chips do - " +
+                    "2017-18 through 2023-24 have only been checked for the very best games (the same " +
+                    "All-time bar, not the regular cutoff), while 2024-25 and 2025-26 are the full " +
+                    "archive at the regular cutoff. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
                     "reveal it, or flip the default in Settings."
             )
             AboutExpandableItem(

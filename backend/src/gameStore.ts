@@ -1082,11 +1082,29 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * they were completed games. The gap-games check is specifically about
  * something real having *already happened* (a played Commissioner's Cup
  * final, actual preseason games), not merely being on the calendar.
+ *
+ * BARN_BURNER_EVENT_IDS below are also excluded (per-ID, not per-league) -
+ * historicalWatchabilityBarnBurners.json's 90+-only games from seasons
+ * that don't otherwise have a full History backfill (e.g. "2018-19"). Each
+ * carries a real tipoff date, so without this exclusion they'd each spawn
+ * their own named-season chip containing only that one game - misleading,
+ * since it reads like a full season archive rather than a single
+ * cherry-picked game. Deliberately excluded by event_id (not by giving them
+ * a different `league` value the way NBA Summer League does) since
+ * historyService.ts's lg-field mapping treats any non-canonical league
+ * value as "summer" - changing it would mislabel these as Summer League
+ * games client-side. They still surface under "All time" (getWatchableHistory
+ * doesn't derive from season labels at all), which is the whole point.
  */
+const BARN_BURNER_EVENT_IDS = ["401585278", "401468287", "401236276", "401071241"];
+
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
+  const placeholders = BARN_BURNER_EVENT_IDS.map(() => "?").join(",");
   const rows = db
-    .prepare(`SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%' AND status = 'final'`)
-    .all(leagueGroup) as {
+    .prepare(
+      `SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%' AND status = 'final' AND event_id NOT IN (${placeholders})`
+    )
+    .all(leagueGroup, ...BARN_BURNER_EVENT_IDS) as {
     tipoff_utc: string;
   }[];
   const finalsEnd = getMostRecentFinalsEnd(leagueGroup);
