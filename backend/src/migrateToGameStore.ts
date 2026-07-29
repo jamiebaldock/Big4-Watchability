@@ -384,7 +384,17 @@ function migrateNhlFile(fileName: string): number {
 }
 
 export function migrateHistoricalBackfill(): void {
-  const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba");
+  // 4 individually-verified 90+ "Barn Burner" games from seasons the main
+  // NBA backfill above doesn't otherwise cover (2017-18 through 2023-24,
+  // found via a margin<=6 pre-filtered search - see investigateNbaBarnBurners.ts/
+  // finalizeBarnBurners.ts) - each already carries its own real season
+  // label, so it surfaces correctly under History's "All time" (its whole
+  // point) and, as a side effect, spawns a sparse named-season chip for
+  // whichever of its own seasons doesn't already have a fuller backfill
+  // (e.g. "2018-19") - that chip will only ever show this one game for that
+  // season, not a full archive, which is expected given only the 90+ tier
+  // was searched for, not a full-season pull.
+  const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba") + migrateFile("historicalWatchabilityBarnBurners.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
   const mlbCount = migrateMlbFile("mlbRawStats.json");
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
