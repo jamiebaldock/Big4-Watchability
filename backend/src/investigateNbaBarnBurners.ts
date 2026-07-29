@@ -51,6 +51,26 @@ const SEASON_WINDOWS: Record<string, { start: string; end: string }> = {
   "2019-20": { start: "2019-10-15", end: "2020-10-20" },
   "2018-19": { start: "2018-10-01", end: "2019-06-20" },
   "2017-18": { start: "2017-10-01", end: "2018-06-15" },
+  // 2016-17 back to 2002-03 - the boundary-tested range (ESPN's play-by-play
+  // reliably starts at the 2002-03 season opener; confirmed 0 plays for any
+  // 2001-02-or-earlier date tested, real data for every 2002-03-or-later
+  // date tested). 2011-12 is the lockout-shortened season (started Dec 25,
+  // not late Oct like every other year here) - window adjusted accordingly.
+  "2016-17": { start: "2016-10-15", end: "2017-06-20" },
+  "2015-16": { start: "2015-10-17", end: "2016-06-25" },
+  "2014-15": { start: "2014-10-18", end: "2015-06-22" },
+  "2013-14": { start: "2013-10-19", end: "2014-06-20" },
+  "2012-13": { start: "2012-10-20", end: "2013-06-25" },
+  "2011-12": { start: "2011-12-15", end: "2012-06-26" },
+  "2010-11": { start: "2010-10-16", end: "2011-06-18" },
+  "2009-10": { start: "2009-10-17", end: "2010-06-22" },
+  "2008-09": { start: "2008-10-18", end: "2009-06-19" },
+  "2007-08": { start: "2007-10-20", end: "2008-06-22" },
+  "2006-07": { start: "2006-10-21", end: "2007-06-19" },
+  "2005-06": { start: "2005-10-22", end: "2006-06-25" },
+  "2004-05": { start: "2004-10-23", end: "2005-06-28" },
+  "2003-04": { start: "2003-10-25", end: "2004-06-20" },
+  "2002-03": { start: "2002-10-19", end: "2003-06-20" },
 };
 
 interface MarginCandidate {
