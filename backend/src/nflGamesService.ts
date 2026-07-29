@@ -79,6 +79,7 @@ export const COMPETITION_LABEL = "NFL - Regular Season";
 // backfill derives the exact same label for already-played games, not just
 // new ones the live pipeline touches going forward.
 export function deriveNflCompetitionLabel(seasonType: number | undefined, weekNumber: number | undefined): string {
+  if (seasonType === 1) return "NFL - Preseason";
   if (seasonType !== 3) return COMPETITION_LABEL;
   switch (weekNumber) {
     case 1:
@@ -218,21 +219,10 @@ async function processNflEvent(event: EspnNflEvent): Promise<GameJson> {
   };
 }
 
-// Regular-season and postseason only - preseason (type 1) is deliberately
-// excluded, same rule backfillRawStatsNfl.ts already validated against real
-// data (a preseason final has no real stakes and pads the Games tab with
-// exhibition noise, same reasoning as MLB's spring-training exclusion).
-// Exported so seasonWindowService.ts's getNflSeasonWindow can reuse the
-// exact same "skip preseason" rule when scanning for the real regular-season
-// start date, rather than re-deriving it.
-export function isRealSeasonEvent(event: EspnNflEvent): boolean {
-  return event.season?.type !== 1 && event.season?.slug !== "preseason";
-}
-
-/** Fetches, scores, and caches one day's NFL games - the NFL analogue of mlbGamesService.ts's getMlbGamesForDate. */
+/** Fetches, scores, and caches one day's NFL games - the NFL analogue of mlbGamesService.ts's getMlbGamesForDate. Preseason included (labeled "NFL - Preseason" via deriveNflCompetitionLabel), same inclusive treatment gamesService.ts's basketball path already gives NBA preseason. */
 export async function getNflGamesForDate(date: string): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
-  const events = (await fetchNflScoreboard(espnDate)).filter(isRealSeasonEvent);
+  const events = await fetchNflScoreboard(espnDate);
 
   const results: GameJson[] = [];
   for (const event of events) {
@@ -250,7 +240,7 @@ export async function getNflGamesForDate(date: string): Promise<GameJson[]> {
  * the Games tab's own slate.
  */
 export async function getNflTeamSchedule(teamId: string): Promise<GameJson[]> {
-  const events = (await fetchNflTeamSchedule(teamId)).filter(isRealSeasonEvent);
+  const events = await fetchNflTeamSchedule(teamId);
   const results: GameJson[] = [];
   for (const event of events) {
     results.push(await processNflEvent(event));

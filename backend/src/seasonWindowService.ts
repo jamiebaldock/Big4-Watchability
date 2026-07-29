@@ -170,22 +170,54 @@ async function getMlbSeasonWindow(): Promise<SeasonWindow | null> {
   return { start, end };
 }
 
-// NFL's calendar directly labels its Regular Season/Postseason groups with
-// real startDate/endDate (see nflEspnClient.ts's own comment on this shape)
-// - no day-by-day scan needed the way MLB's sparse calendar requires.
-// "start" is the Regular Season group's own startDate (preseason, value
-// "1", deliberately excluded - same "skip preseason" rule as everywhere
-// else in this build); "end" is the Postseason group's endDate if it
-// exists yet, falling back to the Regular Season's own endDate otherwise
+// NFL's calendar directly labels its Preseason/Regular Season/Postseason
+// groups with real startDate/endDate (see nflEspnClient.ts's own comment on
+// this shape) - no day-by-day scan needed the way MLB's sparse calendar
+// requires. "start" prefers the Preseason group's own startDate (value "1")
+// - NFL now includes preseason throughout the app (Games tab, team
+// schedules, next-game jump), same inclusive treatment NBA's own preseason
+// already gets - falling back to the Regular Season group's startDate if
+// preseason isn't published yet; "end" is the Postseason group's endDate if
+// it exists yet, falling back to the Regular Season's own endDate otherwise
 // (e.g. mid-season, before the postseason group's real dates are known).
+//
+// Same stale-calendar gap confirmed live 2026-07-29 as basketball's/NHL's:
+// querying with "today" as the anchor during the real off-season gap
+// returns the *previous* season's groups (Regular Season startDate
+// 2025-09-04, a full year stale) instead of the new season's, because
+// ESPN's own season pointer for a query date doesn't roll over until
+// queried near/within the new season. Reported as "Jump to Today" landing
+// on last year's opening week. Same probe-forward fix as
+// getBasketballSeasonWindow/getNhlSeasonWindow: if the Regular Season
+// group's own endDate is already in the past, probe forward until a
+// calendar with a later Regular Season endDate turns up (confirmed live:
+// offset 30 days already returns the real 2026-27 groups).
 async function getNflSeasonWindow(): Promise<SeasonWindow | null> {
-  const groups = await fetchNflCalendarGroups(toEspnDate(new Date()));
-  const regularSeason = groups.find((g) => g.value === "2");
+  const now = new Date();
+  let groups = await fetchNflCalendarGroups(toEspnDate(now));
+  let regularSeason = groups.find((g) => g.value === "2");
+  const nowIso = isoDate(now);
+  const isStale = regularSeason !== undefined && regularSeason.endDate.slice(0, 10) < nowIso;
+
+  if (!regularSeason || isStale) {
+    const staleEnd = regularSeason?.endDate.slice(0, 10) ?? "";
+    for (const offsetDays of GAP_PROBE_OFFSETS_DAYS) {
+      const probeDate = new Date(now.getTime() + offsetDays * ONE_DAY_MS);
+      const probedGroups = await fetchNflCalendarGroups(toEspnDate(probeDate));
+      const probedRegularSeason = probedGroups.find((g) => g.value === "2");
+      if (probedRegularSeason && probedRegularSeason.endDate.slice(0, 10) > staleEnd) {
+        groups = probedGroups;
+        regularSeason = probedRegularSeason;
+        break;
+      }
+    }
+  }
   if (!regularSeason) return null;
+  const preseason = groups.find((g) => g.value === "1");
   const postseason = groups.find((g) => g.value === "3");
 
   return {
-    start: regularSeason.startDate.slice(0, 10),
+    start: (preseason ?? regularSeason).startDate.slice(0, 10),
     end: (postseason ?? regularSeason).endDate.slice(0, 10)
   };
 }
