@@ -46,21 +46,72 @@ async function findRegularSeasonStart(leagues: readonly League[], sortedCalendar
   return undefined;
 }
 
+// Confirmed live 2026-07-29: fetchCalendarDates(today, league) during the
+// real gap between one season's Finals and the next one's preseason
+// returns the *previous* season's calendar - ESPN's own season pointer for
+// a query date doesn't roll over to the new season until queried near/
+// within it (confirmed: querying "today" still returned the 2025-26
+// calendar ending 2026-06-13, while querying October 6 2026 directly
+// already returns the real, live 2026-27 calendar). Left unhandled, this
+// stale window becomes the app's whole notion of "the season" until ESPN's
+// own pointer rolls over on its own - "Go to Today" then can't find today
+// in the loaded (stale, months-old) day range and falls back to the first
+// loaded day, landing on last season's opening night instead of anything
+// resembling "today". Probes forward at increasing offsets (not a single
+// fixed guess, since the real gap's length varies by league/year) until a
+// calendar whose own end date is at or after the probe point is found,
+// which in practice picks up the new season the moment ESPN's pointer for
+// that later date has already flipped - same "don't trust a stale array,
+// go find the real one" fix as getNextScheduledDate's own fallback in
+// gamesService.ts, which hit the identical root cause.
+const GAP_PROBE_OFFSETS_DAYS = [30, 60, 90, 120, 150];
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Union of every member league's own calendar at [anchorDate] - see findRegularSeasonStart's comment for why a single-league fetch isn't enough for a group like NBA's that spans several separate ESPN "leagues". */
+async function unionCalendarAt(leagues: readonly League[], anchorDate: Date): Promise<string[]> {
+  const perLeague = await Promise.all(leagues.map((league) => fetchCalendarDates(toEspnDate(anchorDate), league)));
+  return [...new Set(perLeague.flat())].sort();
+}
+
 async function getBasketballSeasonWindow(leagueGroup: BasketballLeagueGroup): Promise<SeasonWindow | null> {
   const now = new Date();
   const leagues = LEAGUE_GROUPS[leagueGroup];
-  // Union every member league's own calendar rather than just one - see
-  // findRegularSeasonStart's comment for why a single-league fetch isn't
-  // enough for a group like NBA's that spans several separate ESPN
-  // "leagues". For a single-league group (WNBA today) this is a no-op:
-  // Promise.all/flat/Set over one array is identical to fetching it alone.
-  const calendarsPerLeague = await Promise.all(leagues.map((league) => fetchCalendarDates(toEspnDate(now), league)));
-  const allDates = [...new Set(calendarsPerLeague.flat())].sort();
+  const nowIso = isoDate(now);
+
+  let allDates = await unionCalendarAt(leagues, now);
+  const isStale = allDates.length > 0 && allDates[allDates.length - 1] < nowIso;
+
+  if (allDates.length === 0 || isStale) {
+    // Probe forward at increasing offsets (not a single fixed guess, since
+    // the real gap's length varies by league/year) for a genuinely
+    // different (newer) calendar - see the header comment above
+    // GAP_PROBE_OFFSETS_DAYS for the full reasoning.
+    const staleEnd = allDates[allDates.length - 1] ?? "";
+    for (const offsetDays of GAP_PROBE_OFFSETS_DAYS) {
+      const probeDate = new Date(now.getTime() + offsetDays * ONE_DAY_MS);
+      const probed = await unionCalendarAt(leagues, probeDate);
+      if (probed.length > 0 && probed[probed.length - 1] > staleEnd) {
+        allDates = probed;
+        break;
+      }
+    }
+  }
   if (allDates.length === 0) return null;
 
   const end = allDates[allDates.length - 1];
-  const start = await findRegularSeasonStart(leagues, allDates);
-  if (!start) return null;
+  // findRegularSeasonStart deliberately excludes preseason - correct once
+  // the real regular season is actually in ESPN's system, but confirmed
+  // live 2026-07-29 that it isn't always there yet even once the *new*
+  // season's calendar starts appearing: NBA's 2026-27 schedule was only
+  // published as far as its preseason window (Oct 5-16) as of this probe,
+  // full regular-season dates weren't loaded into ESPN's system yet
+  // (their own full-schedule release timeline runs behind the preseason
+  // one). Falling back to the earliest known date in that case still gives
+  // a real, current window (this season's actual preseason opener) instead
+  // of either staying on last season's stale dates or returning null - and
+  // self-corrects the moment ESPN adds real regular-season dates, since
+  // this whole function re-runs fresh once daily.
+  const start = (await findRegularSeasonStart(leagues, allDates)) ?? allDates[0];
 
   return { start, end };
 }
@@ -151,10 +202,28 @@ async function findNhlRegularSeasonStart(sortedCalendarDates: string[]): Promise
   return undefined;
 }
 
+/** NHL analogue of freshestCalendar above - same stale-during-the-gap fix, confirmed live 2026-07-29 (NHL's own season-window was returning 2025-26's calendar, not 2026-27's), just against fetchNhlCalendarDates's single-league shape instead of basketball's per-league one. */
+async function freshestNhlCalendar(now: Date, staleCalendar: string[]): Promise<string[]> {
+  if (staleCalendar.length === 0) return staleCalendar;
+  const nowIso = isoDate(now);
+  const staleEnd = staleCalendar[staleCalendar.length - 1];
+  if (staleEnd >= nowIso) return staleCalendar;
+
+  for (const offsetDays of GAP_PROBE_OFFSETS_DAYS) {
+    const probeDate = new Date(now.getTime() + offsetDays * ONE_DAY_MS);
+    const probeCalendar = await fetchNhlCalendarDates(toEspnDate(probeDate));
+    if (probeCalendar.length > 0 && probeCalendar[probeCalendar.length - 1] > staleEnd) {
+      return probeCalendar;
+    }
+  }
+  return staleCalendar;
+}
+
 /** NHL analogue of getBasketballSeasonWindow - same "end = calendar's own latest date, start = scan forward for first real regular-season game" shape, just against NHL's single flat calendar instead of unioning several basketball "leagues". */
 async function getNhlSeasonWindow(): Promise<SeasonWindow | null> {
   const now = new Date();
-  const allDates = (await fetchNhlCalendarDates(toEspnDate(now))).sort();
+  const rawCalendar = await fetchNhlCalendarDates(toEspnDate(now));
+  const allDates = (await freshestNhlCalendar(now, rawCalendar)).sort();
   if (allDates.length === 0) return null;
 
   const end = allDates[allDates.length - 1];

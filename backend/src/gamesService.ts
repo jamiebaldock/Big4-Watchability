@@ -478,6 +478,29 @@ export async function getTeamSchedule(teamId: string, leagueGroup: BasketballLea
  * yet - a real, not hypothetical, case for NBA between Summer League ending
  * and the following season's schedule release).
  */
+// Confirmed live 2026-07-29: querying fetchCalendarDates anchored on
+// "today" during the real gap between one NBA season's Finals and the
+// next one's preseason returns the *previous* season's calendar (ESPN's
+// own season pointer for a given query date doesn't roll over to the new
+// season until queried near/within it - directly confirmed real Oct 2026
+// preseason games already exist in ESPN's system, just not reflected in
+// a calendar fetched with "now" as the anchor date). Every date in that
+// stale calendar sits before `afterDate`, so the existing candidateDates
+// filter below silently empties out and this returned undefined even
+// though a real next game exists - reported as "Jump to Next Game" doing
+// nothing. Same day-by-day scoreboard scan nhlGamesService.ts's/
+// nflGamesService.ts's own getNextNhlScheduledDate/getNextNflScheduledDate
+// already use as their *only* strategy - immune to the calendar's
+// staleness since it checks real per-day scoreboard data directly, not
+// the convenience calendar array - used here only as a fallback so the
+// normal in-season case keeps the cheaper calendar-based fast path.
+const NEXT_GAME_FALLBACK_SCAN_DAYS = 150;
+const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+function isoDateUtc(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
 export async function getNextScheduledDate(afterDate: string, leagueGroup: BasketballLeagueGroup): Promise<string | undefined> {
   const anchorEspnDate = toEspnDate(new Date(`${afterDate}T12:00:00Z`));
   const calendars = await Promise.all(
@@ -490,6 +513,16 @@ export async function getNextScheduledDate(afterDate: string, leagueGroup: Baske
   for (const date of candidateDates) {
     const games = await getGamesForDate(date, leagueGroup);
     if (games.length > 0) return date;
+  }
+
+  // Calendar-based candidates found nothing - see the comment above
+  // NEXT_GAME_FALLBACK_SCAN_DAYS for why this isn't necessarily "no next
+  // game exists yet" the way it used to always mean.
+  const afterTime = new Date(`${afterDate}T12:00:00Z`).getTime();
+  for (let i = 1; i <= NEXT_GAME_FALLBACK_SCAN_DAYS; i++) {
+    const dateStr = isoDateUtc(new Date(afterTime + i * ONE_DAY_MS));
+    const games = await getGamesForDate(dateStr, leagueGroup);
+    if (games.length > 0) return dateStr;
   }
   return undefined;
 }
