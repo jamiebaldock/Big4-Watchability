@@ -87,6 +87,7 @@ export const COMPETITION_LABEL = "NHL - Regular Season";
  * would fall back to regardless of round.
  */
 export function deriveNhlCompetitionLabel(seasonType: number | undefined, notesHeadline: string | undefined): string {
+  if (seasonType === 1) return "NHL - Preseason";
   if (seasonType !== 3) return COMPETITION_LABEL;
   if (!notesHeadline) return "NHL - Playoffs";
   const roundName = notesHeadline.replace(/\s*-\s*Game\s*\d+\s*$/i, "").trim();
@@ -215,18 +216,10 @@ async function processNhlEvent(event: EspnNhlEvent): Promise<GameJson> {
   };
 }
 
-// Regular-season and postseason only - preseason is excluded, same rule
-// every other league's backfill/live pipeline already applies. Exported so
-// seasonWindowService.ts's getNhlSeasonWindow can reuse the exact same
-// "skip preseason" rule.
-export function isRealSeasonEvent(event: EspnNhlEvent): boolean {
-  return event.season?.slug !== "preseason";
-}
-
-/** Fetches, scores, and caches one day's NHL games - the NHL analogue of mlbGamesService.ts's getMlbGamesForDate/nflGamesService.ts's getNflGamesForDate. */
+/** Fetches, scores, and caches one day's NHL games - the NHL analogue of mlbGamesService.ts's getMlbGamesForDate/nflGamesService.ts's getNflGamesForDate. Preseason included (labeled "NHL - Preseason" via deriveNhlCompetitionLabel), same inclusive treatment NFL's/NBA's own preseason already gets. */
 export async function getNhlGamesForDate(date: string): Promise<GameJson[]> {
   const espnDate = toEspnDate(new Date(`${date}T12:00:00Z`));
-  const events = (await fetchNhlScoreboard(espnDate)).filter(isRealSeasonEvent);
+  const events = await fetchNhlScoreboard(espnDate);
 
   const results: GameJson[] = [];
   for (const event of events) {
@@ -241,7 +234,7 @@ export async function getNhlGamesForDate(date: string): Promise<GameJson[]> {
  * mlbGamesService.ts's/nflGamesService.ts's own team-schedule functions.
  */
 export async function getNhlTeamSchedule(teamId: string): Promise<GameJson[]> {
-  const events = (await fetchNhlTeamSchedule(teamId)).filter(isRealSeasonEvent);
+  const events = await fetchNhlTeamSchedule(teamId);
   const results: GameJson[] = [];
   for (const event of events) {
     results.push(await processNhlEvent(event));

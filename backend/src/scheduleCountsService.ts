@@ -7,9 +7,9 @@
 // this hits each sport's own scoreboard endpoint directly and just collects
 // each game's real UTC tipoff - no LLM calls, no gameStore writes, no rubric
 // math. Reuses each sport's own real-season-event filter (isRealSeasonEvent,
-// MLB/NHL only - NFL includes preseason unfiltered, matching NFL's own
-// getNflGamesForDate) so this always matches what that same day would
-// actually show if browsed on the Games tab.
+// MLB only - NFL/NHL both include preseason unfiltered, matching their own
+// getNflGamesForDate/getNhlGamesForDate) so this always matches what that
+// same day would actually show if browsed on the Games tab.
 //
 // Returns raw tipoff timestamps, NOT pre-grouped per-day counts - grouping
 // happens client-side instead, by the viewer's own local calendar date
@@ -31,7 +31,6 @@ import { fetchMlbScoreboard } from "./mlbEspnClient";
 import { isRealSeasonEvent as isRealMlbSeasonEvent } from "./mlbGamesService";
 import { fetchNflScoreboard } from "./nflEspnClient";
 import { fetchNhlScoreboard } from "./nhlEspnClient";
-import { isRealSeasonEvent as isRealNhlSeasonEvent } from "./nhlGamesService";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP } from "./types";
 
@@ -76,7 +75,7 @@ async function tipoffsForDate(leagueGroup: LeagueGroup, dateIso: string): Promis
     return (await fetchNflScoreboard(espnDate)).map((e) => e.date);
   }
   // hockey
-  return (await fetchNhlScoreboard(espnDate)).filter(isRealNhlSeasonEvent).map((e) => e.date);
+  return (await fetchNhlScoreboard(espnDate)).map((e) => e.date);
 }
 
 /**

@@ -1,19 +1,20 @@
 // Derives the real start/end dates of a league group's current full-season
 // browsing range - not a calendar guess, but read directly off ESPN's own
 // per-game data. Backs the Games tab's full-season day-tab range/calendar
-// picker: the range "start" is the first date with a regular-season-or-later
-// game (excluding preseason, per product decision), and "end" is simply the
-// latest date ESPN's schedule currently knows about - which is why this
-// self-extends once ESPN publishes real playoff/Finals dates, rather than
-// needing a guessed Finals-end date hardcoded anywhere.
+// picker: "end" is simply the latest date ESPN's schedule currently knows
+// about - which is why this self-extends once ESPN publishes real playoff/
+// Finals dates, rather than needing a guessed Finals-end date hardcoded
+// anywhere. "start" excludes preseason only for MLB (spring training) - NBA/
+// NFL/NHL all include preseason as their real "start" per product decision
+// (James, 2026-07-29 for NFL/NHL - matches how NBA's own preseason/Summer
+// League was already being treated).
 import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, toEspnDate } from "./espnClient";
 import { BasketballLeagueGroup, LEAGUE_GROUPS } from "./gamesService";
 import { loadLeagueCache, saveLeagueCache, todayKey } from "./leagueCache";
 import { fetchMlbCalendarDates, fetchMlbScoreboard } from "./mlbEspnClient";
 import { isRealSeasonEvent } from "./mlbGamesService";
 import { fetchNflCalendarGroups } from "./nflEspnClient";
-import { fetchNhlCalendarDates, fetchNhlScoreboard } from "./nhlEspnClient";
-import { isRealSeasonEvent as isRealNhlSeasonEvent } from "./nhlGamesService";
+import { fetchNhlCalendarDates } from "./nhlEspnClient";
 import { LeagueGroup, SPORT_FOR_LEAGUE_GROUP } from "./types";
 
 export interface SeasonWindow {
@@ -222,18 +223,6 @@ async function getNflSeasonWindow(): Promise<SeasonWindow | null> {
   };
 }
 
-// NHL's calendar is dense/flat like basketball's (confirmed directly, ~226
-// real dates spanning the full season) - same findRegularSeasonStart-style
-// scan works, just against NHL's own single-league scoreboard/calendar
-// rather than unioning multiple basketball "leagues".
-async function findNhlRegularSeasonStart(sortedCalendarDates: string[]): Promise<string | undefined> {
-  for (const date of sortedCalendarDates) {
-    const events = await fetchNhlScoreboard(date.replace(/-/g, ""));
-    if (events.some(isRealNhlSeasonEvent)) return date;
-  }
-  return undefined;
-}
-
 /** NHL analogue of freshestCalendar above - same stale-during-the-gap fix, confirmed live 2026-07-29 (NHL's own season-window was returning 2025-26's calendar, not 2026-27's), just against fetchNhlCalendarDates's single-league shape instead of basketball's per-league one. */
 async function freshestNhlCalendar(now: Date, staleCalendar: string[]): Promise<string[]> {
   if (staleCalendar.length === 0) return staleCalendar;
@@ -251,18 +240,19 @@ async function freshestNhlCalendar(now: Date, staleCalendar: string[]): Promise<
   return staleCalendar;
 }
 
-/** NHL analogue of getBasketballSeasonWindow - same "end = calendar's own latest date, start = scan forward for first real regular-season game" shape, just against NHL's single flat calendar instead of unioning several basketball "leagues". */
+/** NHL analogue of getBasketballSeasonWindow - "start"/"end" are simply the calendar's own earliest/latest known dates (preseason included), just against NHL's single flat calendar instead of unioning several basketball "leagues". */
 async function getNhlSeasonWindow(): Promise<SeasonWindow | null> {
   const now = new Date();
   const rawCalendar = await fetchNhlCalendarDates(toEspnDate(now));
   const allDates = (await freshestNhlCalendar(now, rawCalendar)).sort();
   if (allDates.length === 0) return null;
 
-  const end = allDates[allDates.length - 1];
-  const start = await findNhlRegularSeasonStart(allDates);
-  if (!start) return null;
-
-  return { start, end };
+  // allDates already includes preseason (confirmed live: NHL's flat calendar
+  // starts ~2 weeks before the regular season, e.g. 2026-09-19 preseason vs.
+  // 2026-09-29 regular-season opener) - no separate real-season-start scan
+  // needed now that preseason is included throughout (Games tab, team
+  // schedules, next-game jump), same as NFL/NBA.
+  return { start: allDates[0], end: allDates[allDates.length - 1] };
 }
 
 /** Cached once per calendar day per league group - same reasoning as standings/stats (ESPN's schedule doesn't change meaningfully more often than that). */
