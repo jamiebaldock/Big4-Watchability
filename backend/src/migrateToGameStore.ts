@@ -396,7 +396,11 @@ export function migrateHistoricalBackfill(): void {
   // was searched for, not a full-season pull.
   const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba") + migrateFile("historicalWatchabilityBarnBurners.json", "nba", "nba");
   const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
-  const mlbCount = migrateMlbFile("mlbRawStats.json");
+  // 2025 and 2024 are two separate files/completedDates-resume-state (see
+  // backfillRawStatsMlb2024.ts's own header comment for why) - both feed the
+  // same MLB migration function, just called twice, same pattern NFL/NHL
+  // already use below.
+  const mlbCount = migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json");
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
   // same NFL migration function, just called twice.

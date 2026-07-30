@@ -213,7 +213,7 @@ async function fetchSummary(eventId: string): Promise<EspnSummary> {
   return getJson<EspnSummary>(`${BASE_PATH}/summary?event=${eventId}`);
 }
 
-function mapGame(eventId: string, season: string, date: string, summary: EspnSummary): MlbRawGame | null {
+export function mapGame(eventId: string, season: string, date: string, summary: EspnSummary): MlbRawGame | null {
   const competition = summary.header.competitions[0];
   if (!competition?.status.type.completed) return null;
 
