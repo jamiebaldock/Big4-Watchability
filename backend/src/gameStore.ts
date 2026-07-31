@@ -100,7 +100,37 @@ db.exec(`
     detail TEXT
   );
   CREATE INDEX IF NOT EXISTS idx_highlights_log_checked_at ON highlights_search_log(checked_at);
+
+  -- One row per one-off migration/backfill step that's expensive enough
+  -- (thousands+ of upserts) to be worth never repeating once it's actually
+  -- finished - see isMigrationComplete/markMigrationComplete below. Added
+  -- 2026-07-31 after the MLB historical backfill's own re-verify-on-every-
+  -- boot cost (migrateToGameStore.ts, run synchronously on every server
+  -- start) grew from ~5k to ~55k games and blocked Node's event loop long
+  -- enough to fail Render's health check.
+  CREATE TABLE IF NOT EXISTS migration_flags (
+    name TEXT PRIMARY KEY,
+    completed_at TEXT NOT NULL
+  );
 `);
+
+/**
+ * Whether a named one-off migration step has already fully completed - only
+ * ever set true by markMigrationComplete below, called as the very last
+ * statement of the migration it guards, so a step that dies partway through
+ * (a crash, a killed process, a failed health check triggering a restart
+ * mid-run) is never mistaken for done. Row-level idempotency (INSERT OR
+ * IGNORE / WHERE x IS NULL) still makes re-running the guarded step safe
+ * either way - this flag is purely a startup-speed short-circuit for the
+ * common "already ran successfully last boot" case, not a correctness gate.
+ */
+export function isMigrationComplete(name: string): boolean {
+  return db.prepare(`SELECT 1 FROM migration_flags WHERE name = ?`).get(name) !== undefined;
+}
+
+export function markMigrationComplete(name: string): void {
+  db.prepare(`INSERT OR REPLACE INTO migration_flags (name, completed_at) VALUES (?, ?)`).run(name, now());
+}
 
 // Added after the initial release - ensureColumn (not a second CREATE TABLE
 // migration) so this is safe to run against both a brand-new DB (columns

@@ -19,7 +19,17 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
-import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setNhlFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
+import {
+  FinalRubric,
+  isMigrationComplete,
+  markMigrationComplete,
+  setFinalRubric,
+  setMlbFinalRubric,
+  setNflFinalRubric,
+  setNhlFinalRubric,
+  setSeasonStageLabel,
+  upsertBaseEntry,
+} from "./gameStore";
 import { COMPETITION_LABEL as MLB_COMPETITION_LABEL } from "./mlbGamesService";
 import { computeMlbWatchabilityScore, MlbRubricInputs, tierForMlbScore } from "./mlbRubric";
 import { deriveNflCompetitionLabel } from "./nflGamesService";
@@ -408,9 +418,31 @@ export function migrateHistoricalBackfill(): void {
   // partially-collected run (or a fresh checkout missing these large data
   // files) degrades to "whichever seasons are present" instead of crashing
   // devServer's startup.
-  for (let year = 2003; year <= 2023; year++) {
-    const fileName = `mlbRawStats_${year}.json`;
-    if (existsSync(join(DATA_DIR, fileName))) mlbCount += migrateMlbFile(fileName);
+  //
+  // Skipped entirely once a *complete* prior run is recorded (migration_flags,
+  // set only as the last step below) - this function runs synchronously
+  // inside devServer.ts's app.listen() callback on every single boot, and
+  // better-sqlite3's writes block Node's one event loop thread for however
+  // long that takes. Before this 21-season addition, the whole historical
+  // backfill was ~5k games and cheap enough to always re-verify; at 55k+
+  // games, redoing the full upsert/rubric-recompute loop on every restart
+  // blocked the event loop long enough that Render's health check gave up
+  // entirely (2026-07-31 incident - the service failed to come back up
+  // after this migration first shipped). Deliberately a completion flag,
+  // not a cheaper "does *any* row from these years already exist" proxy -
+  // a boot that dies partway through (exactly what caused the incident)
+  // would otherwise leave most of 2003-2023 permanently stuck unmigrated
+  // while every later boot skips the loop believing it's done. Still fully
+  // idempotent at the row level either way (INSERT OR IGNORE / WHERE score
+  // IS NULL), so this flag is purely a startup-speed short-circuit for the
+  // common already-done case, never a correctness gate.
+  const MLB_HISTORICAL_MIGRATION_NAME = "mlb_historical_2003_2023";
+  if (!isMigrationComplete(MLB_HISTORICAL_MIGRATION_NAME)) {
+    for (let year = 2003; year <= 2023; year++) {
+      const fileName = `mlbRawStats_${year}.json`;
+      if (existsSync(join(DATA_DIR, fileName))) mlbCount += migrateMlbFile(fileName);
+    }
+    markMigrationComplete(MLB_HISTORICAL_MIGRATION_NAME);
   }
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
