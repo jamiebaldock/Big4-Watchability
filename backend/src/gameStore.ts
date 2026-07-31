@@ -132,6 +132,35 @@ export function markMigrationComplete(name: string): void {
   db.prepare(`INSERT OR REPLACE INTO migration_flags (name, completed_at) VALUES (?, ?)`).run(name, now());
 }
 
+/**
+ * Deletes every [leagueGroup] row with a tipoff year strictly before
+ * [beforeYear], except the given [keepEventIds] - the standard, minimal-
+ * footprint shape for a league's older-seasons backfill going forward
+ * (James's explicit call, 2026-07-31, after MLB's own full 21-season/50k+
+ * row backfill turned out to only ever surface 8 of those games anywhere
+ * in the app - the rest were dead weight in the live database, contributing
+ * nothing past a first pass through the migration on every boot). The
+ * pattern: collect and score full seasons locally (still useful for
+ * recalibrating a league's own All-time bar against real data, same as
+ * MLB's own threshold went 80 -> 90 once the full picture was in), but only
+ * ever migrate/keep the handful of games that actually clear the bar -
+ * mirrors NBA's original BARN_BURNER_EVENT_IDS approach exactly, just
+ * applied after-the-fact here instead of never over-collecting in the
+ * first place. A single indexed DELETE, not a per-row loop - safe to call
+ * regardless of how much (if any) of the pruned range is actually still
+ * present, so it self-corrects a database left in any partial state by an
+ * earlier crash-looping deploy.
+ */
+export function pruneOlderSeasonsExcept(leagueGroup: LeagueGroup, beforeYear: number, keepEventIds: string[]): number {
+  const placeholders = keepEventIds.map(() => "?").join(",") || "''";
+  const result = db
+    .prepare(
+      `DELETE FROM games WHERE league_group = ? AND CAST(strftime('%Y', tipoff_utc) AS INTEGER) < ? AND event_id NOT IN (${placeholders})`
+    )
+    .run(leagueGroup, beforeYear, ...keepEventIds);
+  return result.changes;
+}
+
 // Added after the initial release - ensureColumn (not a second CREATE TABLE
 // migration) so this is safe to run against both a brand-new DB (columns
 // just won't already exist) and an already-populated one from before these

@@ -19,12 +19,22 @@
 // margin distribution is flat enough that margin<=6 alone only excludes
 // ~14% of real games, so the "cheap filter" barely reduces the expensive
 // per-game summary-fetch volume - not worth the complexity and the sparser,
-// cherry-picked-feeling per-season data a filtered version would produce
-// (and the resulting need to exclude cherry-picked rows from named-season
-// chips the way gameStore.ts's BARN_BURNER_EVENT_IDS does for NBA). A full
-// per-season pull, once run, gives every one of these 21 seasons a real,
-// complete History archive - same shape as "This season" - not just a
-// sparse list of standout games. James's explicit call, 2026-07-30.
+// cherry-picked-feeling per-season data a filtered version would produce.
+// James's explicit call, 2026-07-30.
+//
+// SUPERSEDED 2026-07-31, one day later: the original plan above was to keep
+// every one of these ~50k games live in gameStore as a full History archive
+// for each older season. That shipped, immediately OOM-crashed production
+// (see gameStore.ts's `statements` cache comment and
+// migrateToGameStore.ts's runOnceEver/pruneOlderSeasonsExcept for the full
+// story), and once James also decided to trim named-season chips down to
+// 2024+ only, the "full archive per season" benefit stopped applying
+// anyway - only the games that clear MLB's All-time bar are kept. This
+// script's *output* (mlbRawStats_2003.json etc.) is now purely an
+// intermediate, gitignored, local-only input to extractMlbBarnBurners.ts,
+// not something migrated wholesale - see that script's own header for the
+// standard shape this - and every future league's older-seasons backfill -
+// should follow instead.
 //
 // One season at a time, in order, each with its own resumable
 // completedDates state (own output file) - an interruption partway through

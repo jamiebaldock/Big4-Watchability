@@ -23,6 +23,7 @@ import {
   FinalRubric,
   isMigrationComplete,
   markMigrationComplete,
+  pruneOlderSeasonsExcept,
   setFinalRubric,
   setMlbFinalRubric,
   setNflFinalRubric,
@@ -447,20 +448,32 @@ export function migrateHistoricalBackfill(): void {
   // same MLB migration function, just called twice, same pattern NFL/NHL
   // already use below.
   const mlbRecentCount = runOnceEver("mlb_recent_2024_2025", () => migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json"));
-  // Full per-season backfill for 2003-2023 (backfillRawStatsMlbHistorical.ts -
-  // see its own header comment for why full seasons, not a margin-filtered
-  // Barn Burner sweep like NBA's older seasons). 2003 is the real, tested
-  // ESPN-data lower bound; existsSync guards each file individually so a
-  // partially-collected run (or a fresh checkout missing these large data
-  // files) degrades to "whichever seasons are present" instead of crashing
-  // devServer's startup.
-  const mlbHistoricalCount = runOnceEver("mlb_historical_2003_2023", () => {
-    let count = 0;
-    for (let year = 2003; year <= 2023; year++) {
-      const fileName = `mlbRawStats_${year}.json`;
-      if (existsSync(join(DATA_DIR, fileName))) count += migrateMlbFile(fileName);
-    }
-    return count;
+  // Minimal-footprint shape for an older-seasons backfill, the standard
+  // going forward (James's explicit call, 2026-07-31): mlbRawStats_2003.json
+  // through mlbRawStats_2023.json (backfillRawStatsMlbHistorical.ts, 21
+  // seasons, ~50k games) were collected and scored locally purely to find
+  // which games actually clear MLB's All-time bar - only those 8 games
+  // (mlbHistoricalBarnBurners.json, built by extractMlbBarnBurners.ts) ever
+  // get migrated into the live database. The other ~50k rows were live in
+  // gameStore for a few hours on 2026-07-31 (the full backfill that
+  // preceded this) and contributed nothing no season chip shows them
+  // (MLB_NAMED_SEASON_CUTOFF_YEAR already hides anything before 2024), no
+  // All-time entry needed them - so pruneOlderSeasonsExcept below removes
+  // whatever's left of that full backfill on whichever boot first sees it,
+  // self-correcting regardless of how much of it actually landed before
+  // today's OOM crash-loop. Mirrors NBA's original BARN_BURNER_EVENT_IDS
+  // approach exactly (collect wide, keep only what clears the bar) - the
+  // difference here is only that MLB's over-collection had to be pruned
+  // after the fact instead of never happening in the first place.
+  const mlbHistoricalCount = runOnceEver("mlb_historical_barnburners", () => {
+    const fileName = "mlbHistoricalBarnBurners.json";
+    return existsSync(join(DATA_DIR, fileName)) ? migrateMlbFile(fileName) : 0;
+  });
+  const mlbPrunedCount = runOnceEver("mlb_historical_prune_2026_07_31", () => {
+    const fileName = "mlbHistoricalBarnBurners.json";
+    if (!existsSync(join(DATA_DIR, fileName))) return 0;
+    const { games } = JSON.parse(readFileSync(join(DATA_DIR, fileName), "utf8")) as { games: { eventId: string }[] };
+    return pruneOlderSeasonsExcept("mlb", 2024, games.map((g) => g.eventId));
   });
   const mlbCount = mlbRecentCount + mlbHistoricalCount;
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
@@ -472,7 +485,7 @@ export function migrateHistoricalBackfill(): void {
   const nhlCount = runOnceEver("nhl_recent_2024_2025", () => migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json"));
   console.log(
     `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore ` +
-      `(0 for any league means it was already fully migrated in a prior run and skipped this boot).`
+      `(0 for any league means it was already fully migrated in a prior run and skipped this boot); pruned ${mlbPrunedCount} over-collected pre-2024 MLB rows down to just the games that clear the All-time bar.`
   );
 }
 

@@ -2,3 +2,13 @@ node_modules/
 dist/
 cache/*.json
 .env
+
+# Raw per-season backfill collection files (backfillRawStats*Historical.ts) -
+# large (tens of MB), regenerable by re-running the collector script, and
+# only ever needed locally to find which games clear a league's All-time
+# bar. Never committed - only the small curated *HistoricalBarnBurners.json
+# result (the handful of games that actually clear the bar) gets migrated
+# into gameStore and committed. Standard going forward for every league's
+# older-seasons backfill (James's explicit call, 2026-07-31), matching how
+# NBA's own raw candidate files were never committed either.
+data/*RawStats_*.json
