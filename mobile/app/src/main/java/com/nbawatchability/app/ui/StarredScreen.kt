@@ -165,8 +165,11 @@ fun StarredScreen(
             // whatever tile was on top in view across a re-sort (since it's
             // usually still in the new list, just at a different index) -
             // which can make an already-correct sort look wrong, not just
-            // skip the scroll-to-top animation.
-            LaunchedEffect(sortOption) { listState.animateScrollToTopAdaptively() }
+            // skip the scroll-to-top animation. Also keyed on the min-tier
+            // filter (line 160 above) for the same reason DayTabsScreen's
+            // identical effect is - toggling it reshuffles/shortens the same
+            // list without a re-sort.
+            LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter) { listState.animateScrollToTopAdaptively() }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

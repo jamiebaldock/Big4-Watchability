@@ -11,10 +11,12 @@ import com.nbawatchability.app.data.Game
 import com.nbawatchability.app.data.LeagueGroup
 import com.nbawatchability.app.data.NetworkGameRepository
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.LocalDate
 import java.time.OffsetDateTime
 import java.time.YearMonth
@@ -315,7 +317,9 @@ class GameListViewModel : ViewModel() {
         if (cached != null && System.currentTimeMillis() - cached.fetchedAtMs < SWITCH_CACHE_TTL_MS) {
             com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load: same-session cache hit for $cacheKey, skipping network entirely")
             seasonRange = cached.seasonRange
-            selectedDayIndex = cached.days.indexOfFirst { it.date == today }.coerceAtLeast(0)
+            val cachedLandsOnSeasonStart = cached.seasonRange != null && today !in cached.seasonRange.first..cached.seasonRange.second
+            val cachedAnchor = if (cachedLandsOnSeasonStart) cached.seasonRange!!.first else today
+            selectedDayIndex = landingIndex(cached.days, cachedAnchor, cachedLandsOnSeasonStart)
             uiState = ScheduleUiState.Loaded(cached.days)
             return
         }
@@ -353,11 +357,24 @@ class GameListViewModel : ViewModel() {
                 // range, so the meaningful "first paint" is the season
                 // opener, not an empty today-centered window nobody would
                 // look at before it gets replaced a moment later).
-                val anchor = when {
-                    range == null -> today
-                    today in range.first..range.second -> today
-                    else -> range.first
-                }
+                //
+                // range.first/range.second are the backend's raw ESPN
+                // calendar-day boundaries (Eastern/UTC-ish, see
+                // seasonWindowService.ts), NOT local-date-bucketed the way
+                // the actual displayed days are (rebucketByLocalDate below
+                // re-buckets every game by the VIEWER's local tipoff date).
+                // For anyone in a timezone ahead of the Americas, the real
+                // season-opener game's local date lands one day AFTER this
+                // raw anchor string - landsOnSeasonStart below tracks
+                // whether we're in this "not currently in season" case so
+                // landingIndex can prefer whichever day in the loaded window
+                // actually has games instead of trusting this raw string
+                // literally (confirmed live: NFL's 2026 preseason boundary
+                // is "2026-08-06T07:00Z", sliced to "2026-08-06", while the
+                // real Hall of Fame Game's evening-ET kickoff falls on
+                // Aug 7 local for anyone at UTC-4 or later).
+                val landsOnSeasonStart = range != null && today !in range.first..range.second
+                val anchor = if (landsOnSeasonStart) range!!.first else today
                 val narrowStart = anchor.minusDays(DISPLAY_RANGE_DAYS)
                 val narrowEnd = anchor.plusDays(DISPLAY_RANGE_DAYS)
 
@@ -374,7 +391,7 @@ class GameListViewModel : ViewModel() {
                 )
 
                 if (token != loadToken) return@launch
-                selectedDayIndex = narrowDays.indexOfFirst { it.date == anchor }.coerceAtLeast(0)
+                selectedDayIndex = landingIndex(narrowDays, anchor, landsOnSeasonStart)
                 uiState = ScheduleUiState.Loaded(narrowDays)
                 com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load FIRST PAINT in ${System.currentTimeMillis() - startMs}ms")
 
@@ -391,7 +408,7 @@ class GameListViewModel : ViewModel() {
                         "full season fetch took ${System.currentTimeMillis() - fullStartMs}ms, got ${fullDays.size} days"
                     )
                     if (token != loadToken) return@launch
-                    selectedDayIndex = fullDays.indexOfFirst { it.date == anchor }.coerceAtLeast(0)
+                    selectedDayIndex = landingIndex(fullDays, anchor, landsOnSeasonStart)
                     uiState = ScheduleUiState.Loaded(fullDays)
                     fullDays
                 } else {
@@ -645,15 +662,42 @@ class GameListViewModel : ViewModel() {
 private fun localDateOf(game: Game): LocalDate =
     OffsetDateTime.parse(game.tipoffUtc).atZoneSameInstant(ZoneId.systemDefault()).toLocalDate()
 
-private fun rebucketByLocalDate(fetched: List<DayGames>, start: LocalDate, end: LocalDate): List<DayGames> {
-    val byLocalDate = fetched.flatMap { it.games }.groupBy(::localDateOf)
-    return generateSequence(start) { it.plusDays(1) }
-        .takeWhile { !it.isAfter(end) }
-        .map { date ->
-            DayGames(
-                date = date,
-                games = byLocalDate[date].orEmpty().sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
-            )
-        }
-        .toList()
+// Picks which day-tab to land on within an already-rebucketed [days] list.
+// When [preferFirstGameDay] is set (the season hasn't started yet, or has
+// already ended with no new one published - see load()'s landsOnSeasonStart),
+// the raw [anchor] string is a backend calendar-boundary date that isn't
+// necessarily the same LOCAL date the actual season-opener game gets
+// rebucketed to (see load()'s comment on this) - so this lands on whichever
+// day in the window actually has games instead, only falling back to the
+// literal anchor date if the window turns out to have no games at all (e.g.
+// a season far enough out that the narrow window doesn't reach it yet).
+private fun landingIndex(days: List<DayGames>, anchor: LocalDate, preferFirstGameDay: Boolean): Int {
+    if (preferFirstGameDay) {
+        val firstGameDayIndex = days.indexOfFirst { it.games.isNotEmpty() }
+        if (firstGameDayIndex >= 0) return firstGameDayIndex
+    }
+    return days.indexOfFirst { it.date == anchor }.coerceAtLeast(0)
 }
+
+// CPU-bound (OffsetDateTime.parse per game for grouping + again per game for
+// the sort key, times however many games a full season's chunked fetch
+// returns - 1000+ for a full NBA season) - off the caller's thread via
+// Dispatchers.Default rather than left to run wherever the caller happens to
+// be (viewModelScope.launch's default Dispatchers.Main.immediate), which was
+// confirmed live to freeze the UI for 1.8-2s (Choreographer "Skipped 110
+// frames", two Davey! frames) right as a full-season load lands - visible to
+// the user as a stutter/hang exactly when switching to a league whose full
+// season just finished loading.
+private suspend fun rebucketByLocalDate(fetched: List<DayGames>, start: LocalDate, end: LocalDate): List<DayGames> =
+    withContext(Dispatchers.Default) {
+        val byLocalDate = fetched.flatMap { it.games }.groupBy(::localDateOf)
+        generateSequence(start) { it.plusDays(1) }
+            .takeWhile { !it.isAfter(end) }
+            .map { date ->
+                DayGames(
+                    date = date,
+                    games = byLocalDate[date].orEmpty().sortedBy { OffsetDateTime.parse(it.tipoffUtc) }
+                )
+            }
+            .toList()
+    }

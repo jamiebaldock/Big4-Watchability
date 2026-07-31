@@ -37,6 +37,7 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -154,7 +155,28 @@ fun DayTabsScreen(
     belledGameIds: Set<String> = emptySet(),
     onToggleBell: (com.nbawatchability.app.data.Game) -> Unit = {}
 ) {
-    val pagerState = rememberPagerState(initialPage = selectedDayIndex) { days.size }
+    // Keyed on the loaded window's own shape (its first date + length), not
+    // just remembered bare - GameListViewModel.load()'s two-phase fetch
+    // swaps the narrow-window `days` list for the full-season one behind the
+    // scenes (same landed-on DATE, but a different numeric index, since the
+    // narrow and full windows start on different dates). A bare
+    // rememberPagerState survives that swap with its OLD numeric
+    // currentPage intact, so for at least one recomposition frame
+    // HorizontalPager renders `days[oldPage]` against the NEW (bigger) list
+    // - a real, confirmed (reproduced on-device) flash of the WRONG day's
+    // games in the pager body a few seconds after first paint, before the
+    // correction below ever gets a chance to run. Keying the state itself to
+    // the window's shape sidesteps the whole problem: a shape change (this
+    // swap, a league switch, or an out-of-window calendar jump) throws away
+    // the old PagerState and builds a fresh one already positioned at
+    // [selectedDayIndex] of the NEW list, so it's never wrong to begin with.
+    // A plain in-window move (day-tab tap, swipe, jump to a date already
+    // loaded) keeps the same shape/key, so the existing PagerState (and the
+    // swipe gesture/settledPage sync below) is untouched.
+    val windowShapeKey = days.firstOrNull()?.date to days.size
+    val pagerState = key(windowShapeKey) {
+        rememberPagerState(initialPage = selectedDayIndex) { days.size }
+    }
     var actionLabel by remember { mutableStateOf<String?>(null) }
     var showCalendar by remember { mutableStateOf(false) }
     // One shared sort preference across every day, not a per-day setting -
@@ -179,12 +201,39 @@ fun DayTabsScreen(
     // cancelled the in-flight one — producing exactly the stuck
     // half-settled/split-page state reported against the calendar picker.
     // settledPage only changes once the pager is done moving (swipe or
-    // programmatic), so it can't reintroduce that loop.
-    LaunchedEffect(pagerState.settledPage) {
+    // programmatic), so it can't reintroduce that loop. windowShapeKey is
+    // included here (and below) purely so both effects are torn down and
+    // relaunched in lockstep with pagerState's own key()-driven recreation
+    // above - LaunchedEffect only restarts a coroutine when one of its keys
+    // actually changes value, and settledPage's OWN value can easily
+    // coincide with what it was under the old (now-replaced) PagerState,
+    // which would otherwise leave this effect's closure silently pointing at
+    // a stale, discarded pagerState instance.
+    LaunchedEffect(windowShapeKey, pagerState.settledPage) {
         if (pagerState.settledPage != selectedDayIndex) onDaySelected(pagerState.settledPage)
     }
-    LaunchedEffect(selectedDayIndex) {
-        if (pagerState.currentPage != selectedDayIndex) pagerState.animateScrollToPage(selectedDayIndex)
+    // A window-SHAPE change (narrow-to-full swap, league switch, out-of-
+    // window jump) is now handled entirely by pagerState's own key() above -
+    // that always hands back a fresh PagerState already sitting on
+    // [selectedDayIndex], so this effect never even sees a mismatch for that
+    // case. What's left for this effect is a plain IN-window move (day-tab
+    // tap, swipe settling, jump to an already-loaded date) on the SAME
+    // PagerState instance, which still needs an actual animated scroll for
+    // the visual feedback a deliberate move should have. lastPositionedDate
+    // is kept mainly as a belt-and-suspenders guard against a same-date
+    // reindex (e.g. a per-day content refresh that leaves the window shape,
+    // and so the key, unchanged) snapping instead of animating.
+    var lastPositionedDate by remember { mutableStateOf<LocalDate?>(null) }
+    LaunchedEffect(windowShapeKey, selectedDayIndex, days) {
+        val targetDate = days.getOrNull(selectedDayIndex)?.date
+        if (pagerState.currentPage != selectedDayIndex) {
+            if (targetDate != null && targetDate == lastPositionedDate) {
+                pagerState.scrollToPage(selectedDayIndex)
+            } else {
+                pagerState.animateScrollToPage(selectedDayIndex)
+            }
+        }
+        lastPositionedDate = targetDate
     }
     // Surfaced through the same small top-right confirmation used for
     // toggle actions elsewhere on this screen, rather than a second overlay
@@ -277,6 +326,26 @@ fun DayTabsScreen(
                     state = pagerState,
                     modifier = Modifier.fillMaxSize()
                 ) { page ->
+                    // Keyed on the actual DATE being shown at this page
+                    // index, not just left to Pager's own default (index-
+                    // based) identity - HorizontalPager retains each page
+                    // slot's composition (including DayGamesList's own
+                    // rememberLazyListState() scroll position) keyed by
+                    // index, regardless of what date that index currently
+                    // represents. A jump/filter that reshuffles which date
+                    // lands on which index (jumpToDateInternal's reload, a
+                    // min-tier filter toggle re-deriving orderedGames, or the
+                    // narrow-to-full-season swap this same file's pagerState
+                    // key() above already guards against for the pager
+                    // ITSELF) would otherwise hand the new date's list
+                    // whatever scroll offset was left over from a totally
+                    // different day at that same index - confirmed live as
+                    // the reported bug: the first game tile landing partly
+                    // scrolled behind the top bar instead of at the very top.
+                    // Keying on the date forces a fresh composition (and so
+                    // a fresh, top-of-list listState) any time the date at
+                    // this index actually changes.
+                    key(days.getOrNull(page)?.date) {
                     Column(modifier = Modifier.fillMaxSize()) {
                         // Only meaningful in "All Leagues" mode - the record
                         // is a cross-league total (see
@@ -318,6 +387,7 @@ fun DayTabsScreen(
                             belledGameIds = belledGameIds,
                             onToggleBell = onToggleBell
                         )
+                    }
                     }
                 }
             }
@@ -371,9 +441,23 @@ private fun CenteringDayTabRow(
     val density = LocalDensity.current
     val tabWidthPx = viewportWidth / 3
 
-    LaunchedEffect(selectedDayIndex, viewportWidth) {
+    // Same "don't animate a same-date reindex" guard as DayTabsScreen's own
+    // pagerState effect above - the narrow-to-full-season swap moves
+    // selectedDayIndex to a different number for the SAME landed-on date
+    // (the two windows start on different dates), which would otherwise
+    // animate this row a visible distance shortly after the league finishes
+    // loading even though nothing the viewer picked has changed.
+    var lastPositionedDate by remember { mutableStateOf<LocalDate?>(null) }
+    LaunchedEffect(selectedDayIndex, viewportWidth, days) {
         if (tabWidthPx == 0 || days.isEmpty()) return@LaunchedEffect
-        listState.animateScrollToItem((selectedDayIndex - 1).coerceIn(0, days.size - 1))
+        val targetIndex = (selectedDayIndex - 1).coerceIn(0, days.size - 1)
+        val targetDate = days.getOrNull(selectedDayIndex)?.date
+        if (lastPositionedDate == null || targetDate == lastPositionedDate) {
+            listState.scrollToItem(targetIndex)
+        } else {
+            listState.animateScrollToItem(targetIndex)
+        }
+        lastPositionedDate = targetDate
     }
 
     LazyRow(
@@ -478,8 +562,15 @@ private fun DayGamesList(
     val listState = rememberLazyListState()
     // Without this, LazyColumn's key-based item tracking keeps whatever
     // tile was on top in view across a re-sort, same reasoning as every
-    // other sortable tab's identical effect.
-    LaunchedEffect(sortOption) { listState.animateScrollToTopAdaptively() }
+    // other sortable tab's identical effect. Also keyed on the min-tier
+    // filter (minTierFilterEnabled/minTierFilter both feed orderedGames'
+    // filterByMinTier call above) - toggling it removes/restores tiles from
+    // the SAME day's list without changing which day/page this is, so it
+    // needs the same reset-to-top treatment a re-sort gets; previously only
+    // sortOption was keyed here, so filtering while scrolled down left the
+    // list sitting at whatever index it was, no longer necessarily near the
+    // top of the newly-shorter filtered list.
+    LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter) { listState.animateScrollToTopAdaptively() }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
