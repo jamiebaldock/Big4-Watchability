@@ -409,7 +409,8 @@ fun AppRoot() {
     // early before reaching this point.
     CompositionLocalProvider(
         LocalPlayerHaterMode provides appSettingsViewModel.settings.playerHaterMode,
-        LocalHatedPlayerNames provides favoritesViewModel.hatedPlayers.map { it.name }.toSet()
+        LocalHatedPlayerNames provides favoritesViewModel.hatedPlayers.map { it.name }.toSet(),
+        LocalConfettiEnabled provides appSettingsViewModel.settings.confettiEnabled
     ) {
     Scaffold(
         containerColor = BackgroundBase,
@@ -460,6 +461,8 @@ fun AppRoot() {
                     onToggleWifiOnlyHighlights = appSettingsViewModel::toggleWifiOnlyHighlights,
                     lightTheme = appSettingsViewModel.settings.lightTheme,
                     onToggleLightTheme = appSettingsViewModel::toggleLightTheme,
+                    confettiEnabled = appSettingsViewModel.settings.confettiEnabled,
+                    onToggleConfettiEnabled = appSettingsViewModel::toggleConfettiEnabled,
                     defaultGameDetailTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
                     onDefaultGameDetailTabChange = { appSettingsViewModel.setDefaultGameDetailTab(it.name) }
                 )

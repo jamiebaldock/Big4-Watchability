@@ -166,14 +166,20 @@ fun GameCard(
     // process (instantClassicCelebrated below) - a game that's already
     // Instant Classic every time this tile re-renders (scrolling it in and
     // out of view, switching tabs and back) only gets the burst the first
-    // time, not on every recomposition.
+    // time, not on every recomposition. instantClassicCelebrated is still
+    // marked even when confettiEnabled is off, so turning the setting back
+    // on later doesn't retroactively fire it for games that already
+    // finished while it was disabled.
     val haptic = LocalHapticFeedback.current
+    val confettiEnabled = LocalConfettiEnabled.current
     var showConfetti by remember { mutableStateOf(false) }
     LaunchedEffect(game.id, tier, game.status) {
         if (tier == Tier.INSTANT_CLASSIC && game.status == GameStatus.FINAL && game.id !in instantClassicCelebrated) {
             instantClassicCelebrated += game.id
-            showConfetti = true
-            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            if (confettiEnabled) {
+                showConfetti = true
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            }
         }
     }
 

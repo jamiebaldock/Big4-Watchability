@@ -24,3 +24,17 @@ val LocalPlayerHaterMode = staticCompositionLocalOf { false }
  * LocalPlayerHaterMode above - provided at the same call site, alongside it.
  */
 val LocalHatedPlayerNames = staticCompositionLocalOf<Set<String>> { emptySet() }
+
+/**
+ * Whether the Instant Classic confetti burst + haptic buzz (AppSettings.
+ * confettiEnabled, a normal Settings toggle - not an easter egg) fires at
+ * all. Same CompositionLocal-over-threading reasoning as
+ * [LocalPlayerHaterMode] above - read directly by GameCard.kt instead of
+ * adding a parameter to every GameCard call site, and provided at the same
+ * place (AppRoot.kt's CompositionLocalProvider around the bottom-nav
+ * Scaffold). Defaults to true so any GameCard rendered outside that provider
+ * (there shouldn't be any, but see LocalPlayerHaterMode's own comment on
+ * drill-down screens returning early) keeps the original always-on behavior
+ * rather than silently going quiet.
+ */
+val LocalConfettiEnabled = staticCompositionLocalOf { true }

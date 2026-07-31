@@ -83,6 +83,10 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setPlayerHaterMode(!settings.playerHaterMode) }
     }
 
+    fun toggleConfettiEnabled() {
+        viewModelScope.launch { repository.setConfettiEnabled(!settings.confettiEnabled) }
+    }
+
     /**
      * Picks a single real league, turning "All Leagues" back off - the one
      * place this reset happens, shared by every tab's dropdown

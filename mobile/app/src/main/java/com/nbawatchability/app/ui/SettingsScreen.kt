@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.AdminPanelSettings
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.material.icons.filled.ChecklistRtl
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Favorite
@@ -81,6 +82,8 @@ fun SettingsScreen(
     onToggleWifiOnlyHighlights: () -> Unit,
     lightTheme: Boolean,
     onToggleLightTheme: () -> Unit,
+    confettiEnabled: Boolean,
+    onToggleConfettiEnabled: () -> Unit,
     defaultGameDetailTab: GameDetailTab,
     onDefaultGameDetailTabChange: (GameDetailTab) -> Unit
 ) {
@@ -303,6 +306,27 @@ fun SettingsScreen(
                 Switch(
                     checked = lightTheme,
                     onCheckedChange = { onToggleLightTheme() },
+                    colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
+                )
+            }
+
+            HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(modifier = Modifier.weight(1f).padding(end = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(imageVector = Icons.Default.Celebration, contentDescription = null, tint = TextSecondary)
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(text = "Instant Classic confetti", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
+                }
+                Switch(
+                    checked = confettiEnabled,
+                    onCheckedChange = { onToggleConfettiEnabled() },
                     colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
             }

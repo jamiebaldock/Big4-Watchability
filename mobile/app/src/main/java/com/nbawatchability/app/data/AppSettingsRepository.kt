@@ -38,6 +38,11 @@ private val ALL_LEAGUES_SELECTED_KEY = booleanPreferencesKey("all_leagues_select
 // StandoutPerformerCallout without threading a parameter through every
 // GameCard call site.
 private val PLAYER_HATER_MODE_KEY = booleanPreferencesKey("player_hater_mode")
+// Whether the Instant Classic confetti burst (+ haptic buzz) fires at all -
+// see GameCard.kt's instantClassicCelebrated/LocalConfettiEnabled. Default
+// true (on) preserves the existing always-on behavior for anyone who
+// upgrades without visiting Settings.
+private val CONFETTI_ENABLED_KEY = booleanPreferencesKey("confetti_enabled")
 
 // Only the core US sports set ships enabled by default for now - NBA/WNBA/MLB/
 // NFL/NHL are all fully built - every other LeagueGroup entry (F1, cricket,
@@ -92,7 +97,10 @@ data class AppSettings(
     val isAllLeaguesSelected: Boolean = false,
     // Easter egg, see PLAYER_HATER_MODE_KEY above - not shown in the normal
     // Settings list, only togglable from the hidden SecretScreen.
-    val playerHaterMode: Boolean = false
+    val playerHaterMode: Boolean = false,
+    // Default (true) preserves the confetti burst's original always-on
+    // behavior - see CONFETTI_ENABLED_KEY above.
+    val confettiEnabled: Boolean = true
 )
 
 /** Persists the last-selected league, which leagues show in the dropdown, and Games-tab display prefs (numeric score) - on-device only, so they survive an app restart. */
@@ -113,7 +121,8 @@ class AppSettingsRepository(private val context: Context) {
             lightTheme = prefs[LIGHT_THEME_KEY] ?: false,
             defaultGameDetailTab = prefs[DEFAULT_GAME_DETAIL_TAB_KEY] ?: "BREAKDOWN",
             isAllLeaguesSelected = prefs[ALL_LEAGUES_SELECTED_KEY] ?: false,
-            playerHaterMode = prefs[PLAYER_HATER_MODE_KEY] ?: false
+            playerHaterMode = prefs[PLAYER_HATER_MODE_KEY] ?: false,
+            confettiEnabled = prefs[CONFETTI_ENABLED_KEY] ?: true
         )
     }
 
@@ -167,5 +176,9 @@ class AppSettingsRepository(private val context: Context) {
 
     suspend fun setPlayerHaterMode(value: Boolean) {
         context.appSettingsDataStore.edit { it[PLAYER_HATER_MODE_KEY] = value }
+    }
+
+    suspend fun setConfettiEnabled(value: Boolean) {
+        context.appSettingsDataStore.edit { it[CONFETTI_ENABLED_KEY] = value }
     }
 }
