@@ -1095,14 +1095,30 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * value as "summer" - changing it would mislabel these as Summer League
  * games client-side. They still surface under "All time" (getWatchableHistory
  * doesn't derive from season labels at all), which is the whole point.
+ *
+ * MLB's own older seasons (2003-2023, backfillRawStatsMlbHistorical.ts) get
+ * the same "All time only, no named-season chip" treatment, but by year
+ * range rather than a per-ID list - unlike NBA's 4 individually cherry-
+ * picked Barn Burner games, this is a *full* per-season backfill (every
+ * game, not just standouts) for 21 whole seasons, ~50k rows. Enumerating
+ * those as an ID list the way BARN_BURNER_EVENT_IDS does would mean
+ * hardcoding tens of thousands of event ids; excluding by tipoff year
+ * instead keeps this a one-line, O(1) condition regardless of how many
+ * games those seasons contain. James's explicit call, 2026-07-31 - keeps
+ * MLB's season-chip row the same length as every other league's (This
+ * season + 2 named seasons + All time) while still giving All time the
+ * full 23-season pool to draw its real top games from.
  */
 const BARN_BURNER_EVENT_IDS = ["401585278", "401468287", "401236276", "401071241"];
+const MLB_NAMED_SEASON_CUTOFF_YEAR = 2024;
 
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
   const placeholders = BARN_BURNER_EVENT_IDS.map(() => "?").join(",");
+  const mlbYearFilter =
+    leagueGroup === "mlb" ? `AND CAST(strftime('%Y', tipoff_utc) AS INTEGER) >= ${MLB_NAMED_SEASON_CUTOFF_YEAR}` : "";
   const rows = db
     .prepare(
-      `SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%' AND status = 'final' AND event_id NOT IN (${placeholders})`
+      `SELECT tipoff_utc FROM games WHERE league_group = ? AND league NOT LIKE 'nba-summer-%' AND status = 'final' AND event_id NOT IN (${placeholders}) ${mlbYearFilter}`
     )
     .all(leagueGroup, ...BARN_BURNER_EVENT_IDS) as {
     tipoff_utc: string;

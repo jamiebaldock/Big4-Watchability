@@ -68,6 +68,16 @@ private val earliestDateFormatter = DateTimeFormatter.ofPattern("MMM d, yyyy")
 // more WNBA seasons get backfilled and the pool grows past single digits.
 private const val ALL_TIME_MIN_SCORE_NBA = 90
 private const val ALL_TIME_MIN_SCORE_WNBA = 75
+// Revised 2026-07-31 once the full 21-season historical backfill (2003-2023,
+// backfillRawStatsMlbHistorical.ts) landed: 80 against the complete
+// 55,247-game real dataset (2003-2025) surfaced 63 games - far more than
+// NBA's All-time list (7 games) reads as. Bumped to 90, which the same full
+// dataset shows clears to exactly 9 games - much closer to NBA's own count
+// and a genuinely elite bar again (~0.016% of all real MLB games since
+// 2003). James's explicit call, 2026-07-31 - supersedes the original 80
+// pick from 2026-07-30, which was only checked against the 2024+2025
+// sample (4,951 games) before the older seasons were backfilled.
+private const val ALL_TIME_MIN_SCORE_MLB = 90
 
 // Random pick shown when a preset/date range has nothing qualifying - one of
 // several instead of always the same sentence, purely for flavor. Overridden
@@ -109,9 +119,11 @@ private fun thisSeasonStartMessage(league: LeagueGroup): String? = when (league)
  * through the same league-aware rubric), games scoring 70+ only
  * (gameStore.ts's HISTORY_MIN_SCORE - stricter than the "Worth Your Time"
  * tier badge's own >=65), most-watchable-first by default - except "All
- * time" (ALL_TIME_MIN_SCORE_NBA/ALL_TIME_MIN_SCORE_WNBA above), which holds
- * every season's worth of backfill to a much higher, per-league bar
- * instead. The breakdown defaults to spoiler-blurred here (GameCard's
+ * time" (ALL_TIME_MIN_SCORE_NBA/ALL_TIME_MIN_SCORE_WNBA/ALL_TIME_MIN_SCORE_MLB
+ * above), which holds every season's worth of backfill to a much higher,
+ * per-league bar instead. NFL/NHL don't have their own bar yet and still
+ * fall through to NBA's 90 (the `else` branch below) - not yet calibrated
+ * against either league's own real score distribution. The breakdown defaults to spoiler-blurred here (GameCard's
  * spoilerFree = false) same as every other tab, tap-to-reveal per game
  * (FullBreakdownSection's own `revealed` state) - was briefly spoilerFree =
  * true on the reasoning that these are old, already-decided games with
@@ -266,10 +278,7 @@ fun HistoryScreen(
                     )
                     NumericScoreToggleButton(
                         checked = showNumericScore,
-                        onCheckedChange = {
-                            onToggleNumericScore()
-                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
-                        }
+                        onCheckedChange = { onToggleNumericScore() }
                     )
                 },
                 secondary = {
@@ -330,6 +339,7 @@ fun HistoryScreen(
                         uiState.games.filter { game ->
                             val allTimeMinScore = when (leagueGroupOf(game)) {
                                 LeagueGroup.WNBA -> ALL_TIME_MIN_SCORE_WNBA
+                                LeagueGroup.MLB -> ALL_TIME_MIN_SCORE_MLB
                                 else -> ALL_TIME_MIN_SCORE_NBA
                             }
                             (game.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) ?: 0) >= allTimeMinScore

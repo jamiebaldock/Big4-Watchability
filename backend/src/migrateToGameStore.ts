@@ -16,7 +16,7 @@
 // verifies nothing's missing.
 //
 // Can still be run standalone: npx tsx src/migrateToGameStore.ts
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { League } from "./espnClient";
 import { FinalRubric, setFinalRubric, setMlbFinalRubric, setNflFinalRubric, setNhlFinalRubric, setSeasonStageLabel, upsertBaseEntry } from "./gameStore";
@@ -400,7 +400,18 @@ export function migrateHistoricalBackfill(): void {
   // backfillRawStatsMlb2024.ts's own header comment for why) - both feed the
   // same MLB migration function, just called twice, same pattern NFL/NHL
   // already use below.
-  const mlbCount = migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json");
+  let mlbCount = migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json");
+  // Full per-season backfill for 2003-2023 (backfillRawStatsMlbHistorical.ts -
+  // see its own header comment for why full seasons, not a margin-filtered
+  // Barn Burner sweep like NBA's older seasons). 2003 is the real, tested
+  // ESPN-data lower bound; existsSync guards each file individually so a
+  // partially-collected run (or a fresh checkout missing these large data
+  // files) degrades to "whichever seasons are present" instead of crashing
+  // devServer's startup.
+  for (let year = 2003; year <= 2023; year++) {
+    const fileName = `mlbRawStats_${year}.json`;
+    if (existsSync(join(DATA_DIR, fileName))) mlbCount += migrateMlbFile(fileName);
+  }
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
   // same NFL migration function, just called twice.
