@@ -393,6 +393,39 @@ function migrateNhlFile(fileName: string): number {
   return games.length;
 }
 
+/**
+ * Runs [work] (a migrateXFile call or group of them) at most once ever,
+ * short-circuiting on every later boot once [name] is recorded as complete
+ * in gameStore's migration_flags table - see that table's own comment for
+ * why (2026-07-31 production incident: this function runs synchronously
+ * inside devServer.ts's app.listen() callback on every single boot, and
+ * better-sqlite3's writes block Node's one event loop thread for however
+ * long the work takes - redoing tens of thousands of upserts on *every*
+ * restart, not just the first one, blocked the event loop long enough to
+ * fail Render's health check entirely).
+ *
+ * Applied to every migrateXFile call below, not just MLB's - NBA/WNBA/NFL/
+ * NHL's current backfills are small enough (a few thousand games each) to
+ * not have caused this incident themselves, but NFL and NHL are next in
+ * line for their own full-season historical backfills (BACKLOG.md's F7),
+ * which would hit the identical failure mode at whatever scale they add
+ * unless they're already guarded before that work starts.
+ *
+ * Deliberately a completion flag, not a cheaper "does *any* row already
+ * exist" proxy - a boot that dies partway through (exactly what caused the
+ * incident) would otherwise leave most of a backfill permanently stuck
+ * unmigrated while every later boot skips it believing it's done. Still
+ * fully idempotent at the row level regardless of this flag (INSERT OR
+ * IGNORE / WHERE score IS NULL) - the flag is purely a startup-speed
+ * short-circuit for the common already-done case, never a correctness gate.
+ */
+function runOnceEver(name: string, work: () => number): number {
+  if (isMigrationComplete(name)) return 0;
+  const count = work();
+  markMigrationComplete(name);
+  return count;
+}
+
 export function migrateHistoricalBackfill(): void {
   // 4 individually-verified 90+ "Barn Burner" games from seasons the main
   // NBA backfill above doesn't otherwise cover (2017-18 through 2023-24,
@@ -404,13 +437,16 @@ export function migrateHistoricalBackfill(): void {
   // (e.g. "2018-19") - that chip will only ever show this one game for that
   // season, not a full archive, which is expected given only the 90+ tier
   // was searched for, not a full-season pull.
-  const nbaCount = migrateFile("historicalWatchability.json", "nba", "nba") + migrateFile("historicalWatchabilityBarnBurners.json", "nba", "nba");
-  const wnbaCount = migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba");
+  const nbaCount = runOnceEver(
+    "nba_historical",
+    () => migrateFile("historicalWatchability.json", "nba", "nba") + migrateFile("historicalWatchabilityBarnBurners.json", "nba", "nba")
+  );
+  const wnbaCount = runOnceEver("wnba_historical", () => migrateFile("historicalWatchabilityWnba.json", "wnba", "wnba"));
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsMlb2024.ts's own header comment for why) - both feed the
   // same MLB migration function, just called twice, same pattern NFL/NHL
   // already use below.
-  let mlbCount = migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json");
+  const mlbRecentCount = runOnceEver("mlb_recent_2024_2025", () => migrateMlbFile("mlbRawStats.json") + migrateMlbFile("mlbRawStats2024.json"));
   // Full per-season backfill for 2003-2023 (backfillRawStatsMlbHistorical.ts -
   // see its own header comment for why full seasons, not a margin-filtered
   // Barn Burner sweep like NBA's older seasons). 2003 is the real, tested
@@ -418,41 +454,25 @@ export function migrateHistoricalBackfill(): void {
   // partially-collected run (or a fresh checkout missing these large data
   // files) degrades to "whichever seasons are present" instead of crashing
   // devServer's startup.
-  //
-  // Skipped entirely once a *complete* prior run is recorded (migration_flags,
-  // set only as the last step below) - this function runs synchronously
-  // inside devServer.ts's app.listen() callback on every single boot, and
-  // better-sqlite3's writes block Node's one event loop thread for however
-  // long that takes. Before this 21-season addition, the whole historical
-  // backfill was ~5k games and cheap enough to always re-verify; at 55k+
-  // games, redoing the full upsert/rubric-recompute loop on every restart
-  // blocked the event loop long enough that Render's health check gave up
-  // entirely (2026-07-31 incident - the service failed to come back up
-  // after this migration first shipped). Deliberately a completion flag,
-  // not a cheaper "does *any* row from these years already exist" proxy -
-  // a boot that dies partway through (exactly what caused the incident)
-  // would otherwise leave most of 2003-2023 permanently stuck unmigrated
-  // while every later boot skips the loop believing it's done. Still fully
-  // idempotent at the row level either way (INSERT OR IGNORE / WHERE score
-  // IS NULL), so this flag is purely a startup-speed short-circuit for the
-  // common already-done case, never a correctness gate.
-  const MLB_HISTORICAL_MIGRATION_NAME = "mlb_historical_2003_2023";
-  if (!isMigrationComplete(MLB_HISTORICAL_MIGRATION_NAME)) {
+  const mlbHistoricalCount = runOnceEver("mlb_historical_2003_2023", () => {
+    let count = 0;
     for (let year = 2003; year <= 2023; year++) {
       const fileName = `mlbRawStats_${year}.json`;
-      if (existsSync(join(DATA_DIR, fileName))) mlbCount += migrateMlbFile(fileName);
+      if (existsSync(join(DATA_DIR, fileName))) count += migrateMlbFile(fileName);
     }
-    markMigrationComplete(MLB_HISTORICAL_MIGRATION_NAME);
-  }
+    return count;
+  });
+  const mlbCount = mlbRecentCount + mlbHistoricalCount;
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
   // same NFL migration function, just called twice.
-  const nflCount = migrateNflFile("nflRawStats.json") + migrateNflFile("nflRawStats2024.json");
+  const nflCount = runOnceEver("nfl_recent_2024_2025", () => migrateNflFile("nflRawStats.json") + migrateNflFile("nflRawStats2024.json"));
   // Same reasoning as NFL above - 2025-26 and 2024-25 are separate files/
   // resume-state (see backfillRawStatsNhl2024.ts's own header comment).
-  const nhlCount = migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json");
+  const nhlCount = runOnceEver("nhl_recent_2024_2025", () => migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json"));
   console.log(
-    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore.`
+    `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore ` +
+      `(0 for any league means it was already fully migrated in a prior run and skipped this boot).`
   );
 }
 
