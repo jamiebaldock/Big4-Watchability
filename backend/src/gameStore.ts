@@ -214,6 +214,82 @@ function now(): string {
   return new Date().toISOString();
 }
 
+/**
+ * Every hot-path write statement, prepared exactly once at module load
+ * (schema setup above is already finished by this point) and reused for
+ * the life of the process, instead of each setter calling db.prepare(sql)
+ * fresh on every invocation. Root cause of the 2026-07-31 production
+ * outage: better-sqlite3 compiles a brand-new native prepared-statement
+ * object on every db.prepare() call, even for byte-identical SQL text: a
+ * migration touching 55k+ rows was calling db.prepare() 100k+ times in one
+ * tight synchronous burst (2 calls/game: upsertBaseEntry + the relevant
+ * setXFinalRubric), which outpaced V8's garbage collector and crashed the
+ * whole process with "FATAL ERROR: ... JavaScript heap out of memory"
+ * (confirmed from Render's actual service logs, not theorized) - a
+ * fundamentally different failure than the health-check-timeout theory the
+ * two earlier fixes (migration_flags/runOnceEver) addressed. Statement
+ * objects are reentrant/thread-safe to reuse across calls in better-
+ * sqlite3's synchronous single-connection model, so this is a pure
+ * performance/memory fix with no behavior change.
+ */
+const statements = {
+  upsertBaseEntry: db.prepare(
+    `INSERT OR IGNORE INTO games
+       (event_id, league, league_group, away, home, away_logo, home_logo, tipoff_utc, status, updated_at)
+     VALUES (@eventId, @league, @leagueGroup, @away, @home, @awayLogo, @homeLogo, @tipoffUtc, @status, @updatedAt)`
+  ),
+  updateStatus: db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`),
+  setSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`),
+  forceSetSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`),
+  setFinalRubric: db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, final_margin=@finalMargin,
+       largest_deficit_overcome=@largestDeficitOvercome, lead_changes=@leadChanges,
+       overtime_periods=@overtimePeriods, close_in_final_two_min=@closeInFinalTwoMin,
+       lead_change_in_final_min=@leadChangeInFinalMin, decided_on_final_possession=@decidedOnFinalPossession,
+       buzzer_beater=@buzzerBeater, star_performance=@starPerformance, standout_performers=@standoutPerformers,
+       score=@score, tier=@tier,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ),
+  setMlbFinalRubric: db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       mlb_rubric_inputs=@mlbRubricInputs,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ),
+  setNflFinalRubric: db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       nfl_rubric_inputs=@nflRubricInputs,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ),
+  setNhlFinalRubric: db.prepare(
+    `UPDATE games SET
+       status='final', final_at=@finalAt,
+       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
+       standout_performers=@standoutPerformers,
+       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
+       nhl_rubric_inputs=@nhlRubricInputs,
+       updated_at=@updatedAt
+     WHERE event_id=@eventId AND score IS NULL`
+  ),
+  setHighlights: db.prepare(
+    `UPDATE games SET yt_video_id=?, yt_found_at=?, yt_published_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`
+  ),
+  setHighlightsFromSeed: db.prepare(`UPDATE games SET yt_video_id=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`),
+  setPreview: db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`),
+};
+
 export interface FinalRubric {
   awayScore: number;
   homeScore: number;
@@ -281,11 +357,7 @@ export function upsertBaseEntry(entry: {
   tipoffUtc: string;
   status: GameStatus;
 }): void {
-  db.prepare(
-    `INSERT OR IGNORE INTO games
-       (event_id, league, league_group, away, home, away_logo, home_logo, tipoff_utc, status, updated_at)
-     VALUES (@eventId, @league, @leagueGroup, @away, @home, @awayLogo, @homeLogo, @tipoffUtc, @status, @updatedAt)`
-  ).run({
+  statements.upsertBaseEntry.run({
     eventId: entry.eventId,
     league: entry.league,
     leagueGroup: entry.leagueGroup,
@@ -301,11 +373,7 @@ export function upsertBaseEntry(entry: {
 
 /** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */
 export function updateStatus(eventId: string, status: GameStatus): void {
-  db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`).run(
-    status,
-    now(),
-    eventId
-  );
+  statements.updateStatus.run(status, now(), eventId);
 }
 
 // better-sqlite3 returns raw column names as-is (snake_case) - it does not
@@ -467,13 +535,7 @@ export function getHeadToHead(leagueGroup: LeagueGroup, teamA: string, teamB: st
 
 /** Pregame preview (hook/pitch/stakes) - set once, 24h before tipoff, permanent. */
 export function setPreview(eventId: string, hook: string, pitch: string, stakes: number): void {
-  db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`).run(
-    hook,
-    pitch,
-    stakes,
-    now(),
-    eventId
-  );
+  statements.setPreview.run(hook, pitch, stakes, now(), eventId);
 }
 
 /**
@@ -483,11 +545,7 @@ export function setPreview(eventId: string, hook: string, pitch: string, stakes:
  * call after the first a no-op.
  */
 export function setSeasonStageLabel(eventId: string, label: string): void {
-  db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`).run(
-    label,
-    now(),
-    eventId
-  );
+  statements.setSeasonStageLabel.run(label, now(), eventId);
 }
 
 /**
@@ -503,7 +561,7 @@ export function setSeasonStageLabel(eventId: string, label: string): void {
  * removed once run once against production and confirmed.
  */
 export function forceSetSeasonStageLabel(eventId: string, label: string): void {
-  db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`).run(label, now(), eventId);
+  statements.forceSetSeasonStageLabel.run(label, now(), eventId);
 }
 
 /**
@@ -516,18 +574,7 @@ export function forceSetSeasonStageLabel(eventId: string, label: string): void {
  * game that later gets a highlights match found.
  */
 export function setFinalRubric(eventId: string, rubric: FinalRubric, finalAt: string | null = now()): void {
-  db.prepare(
-    `UPDATE games SET
-       status='final', final_at=@finalAt,
-       away_score=@awayScore, home_score=@homeScore, final_margin=@finalMargin,
-       largest_deficit_overcome=@largestDeficitOvercome, lead_changes=@leadChanges,
-       overtime_periods=@overtimePeriods, close_in_final_two_min=@closeInFinalTwoMin,
-       lead_change_in_final_min=@leadChangeInFinalMin, decided_on_final_possession=@decidedOnFinalPossession,
-       buzzer_beater=@buzzerBeater, star_performance=@starPerformance, standout_performers=@standoutPerformers,
-       score=@score, tier=@tier,
-       updated_at=@updatedAt
-     WHERE event_id=@eventId AND score IS NULL`
-  ).run({
+  statements.setFinalRubric.run({
     eventId,
     finalAt,
     awayScore: rubric.awayScore,
@@ -579,16 +626,7 @@ export interface MlbFinalResult {
  * WHERE-guard as every other final-rubric setter.
  */
 export function setMlbFinalRubric(eventId: string, result: MlbFinalResult, finalAt: string | null = now()): void {
-  db.prepare(
-    `UPDATE games SET
-       status='final', final_at=@finalAt,
-       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
-       standout_performers=@standoutPerformers,
-       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
-       mlb_rubric_inputs=@mlbRubricInputs,
-       updated_at=@updatedAt
-     WHERE event_id=@eventId AND score IS NULL`
-  ).run({
+  statements.setMlbFinalRubric.run({
     eventId,
     finalAt,
     awayScore: result.awayScore,
@@ -620,16 +658,7 @@ export interface NflFinalResult {
 
 /** NFL's equivalent of setMlbFinalRubric - same narrower-than-basketball column shape, same "never overwrite" WHERE-guard. */
 export function setNflFinalRubric(eventId: string, result: NflFinalResult, finalAt: string | null = now()): void {
-  db.prepare(
-    `UPDATE games SET
-       status='final', final_at=@finalAt,
-       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
-       standout_performers=@standoutPerformers,
-       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
-       nfl_rubric_inputs=@nflRubricInputs,
-       updated_at=@updatedAt
-     WHERE event_id=@eventId AND score IS NULL`
-  ).run({
+  statements.setNflFinalRubric.run({
     eventId,
     finalAt,
     awayScore: result.awayScore,
@@ -660,16 +689,7 @@ export interface NhlFinalResult {
 
 /** NHL's equivalent of setNflFinalRubric - same narrower-than-basketball column shape, same "never overwrite" WHERE-guard. */
 export function setNhlFinalRubric(eventId: string, result: NhlFinalResult, finalAt: string | null = now()): void {
-  db.prepare(
-    `UPDATE games SET
-       status='final', final_at=@finalAt,
-       away_score=@awayScore, home_score=@homeScore, score=@score, tier=@tier,
-       standout_performers=@standoutPerformers,
-       final_margin=@finalMargin, largest_deficit_overcome=@largestDeficitOvercome,
-       nhl_rubric_inputs=@nhlRubricInputs,
-       updated_at=@updatedAt
-     WHERE event_id=@eventId AND score IS NULL`
-  ).run({
+  statements.setNhlFinalRubric.run({
     eventId,
     finalAt,
     awayScore: result.awayScore,
@@ -698,18 +718,12 @@ export function setNhlFinalRubric(eventId: string, result: NhlFinalResult, final
  */
 export function setHighlights(eventId: string, videoId: string, publishedAt: string | null): void {
   const ts = now();
-  db.prepare(
-    `UPDATE games SET yt_video_id=?, yt_found_at=?, yt_published_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`
-  ).run(videoId, ts, publishedAt, ts, eventId);
+  statements.setHighlights.run(videoId, ts, publishedAt, ts, eventId);
 }
 
 /** Manually-confirmed video (highlightsSeed.ts) - sets yt_video_id only, deliberately not yt_found_at (see setHighlights). */
 export function setHighlightsFromSeed(eventId: string, videoId: string): void {
-  db.prepare(`UPDATE games SET yt_video_id=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`).run(
-    videoId,
-    now(),
-    eventId
-  );
+  statements.setHighlightsFromSeed.run(videoId, now(), eventId);
 }
 
 /**
