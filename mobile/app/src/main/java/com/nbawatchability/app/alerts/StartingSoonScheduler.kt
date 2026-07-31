@@ -42,6 +42,29 @@ private const val BELL_EXPIRY_HOURS = 6L
  * set from scratch, cancels anything stale, and (re)sets the rest -
  * FLAG_UPDATE_CURRENT + a per-game requestCode makes re-setting an existing
  * alarm a replace, so there's no double-fire path.
+ *
+ * Deliberately does NOT request battery-optimization exemption
+ * (REQUEST_IGNORE_BATTERY_OPTIMIZATIONS) alongside the exact-alarm prompt
+ * (AlertsSettingsScreen.kt) James asked about, 2026-07-31, after real device
+ * testing traced a background-delivery bug to the missing exact-alarm grant
+ * specifically:
+ * - setExactAndAllowWhileIdle/setAndAllowWhileIdle (both used below) are
+ *   already the Doze-resistant alarm variants Android provides *instead of*
+ *   needing that exemption - the exemption mainly matters for continuous
+ *   background work (foreground services, long-lived syncs), not a single
+ *   scheduled alarm firing at a set time. Once the exact-alarm grant is in
+ *   place, no further exemption should be needed for correct delivery.
+ * - Play Store restricts REQUEST_IGNORE_BATTERY_OPTIMIZATIONS to a narrow
+ *   set of approved use cases (real-time comms, health monitoring, etc.) a
+ *   "starting soon" reminder doesn't clearly fit, and Android's own
+ *   guidelines actively discourage requesting it otherwise - real risk of a
+ *   Play Console policy rejection for a benefit that setAndAllowWhileIdle
+ *   already covers.
+ * - The one thing an exemption still can't fix is aggressive OEM-specific
+ *   battery managers (Samsung/Xiaomi/etc.) that go beyond stock Android Doze
+ *   and kill backgrounded apps outright - there's no standard Android API
+ *   for that; the fix, if ever needed, would be manufacturer-specific
+ *   settings deep-links, out of scope here.
  */
 object StartingSoonScheduler {
 

@@ -1,5 +1,11 @@
 package com.nbawatchability.app.ui
 
+import android.app.AlarmManager
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,12 +17,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Shield
+import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -28,23 +36,42 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.filled.Schedule
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.nbawatchability.app.data.AlertDelivery
 import com.nbawatchability.app.data.LEAD_TIME_OPTIONS_MINUTES
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
+import com.nbawatchability.app.ui.theme.TierInstantClassic
 import com.nbawatchability.app.ui.theme.TierWorthYourTime
+
+/**
+ * True when the OS will honor a *precise* starting-soon alarm - false means
+ * StartingSoonScheduler is silently falling back to setAndAllowWhileIdle,
+ * which real device testing (2026-07-31) confirmed the OS can defer by
+ * 30+ minutes, tracked against elapsed-realtime-since-scheduling rather than
+ * the wall-clock trigger time. Always true below Android 12 (S) - the special
+ * grant this checks didn't exist yet, exact alarms were unrestricted.
+ */
+private fun canScheduleExactAlarms(context: android.content.Context): Boolean =
+    Build.VERSION.SDK_INT < Build.VERSION_CODES.S ||
+        context.getSystemService(AlarmManager::class.java).canScheduleExactAlarms()
 
 /**
  * Preferences for both alert types: starting-soon (client-local alarms,
@@ -77,6 +104,22 @@ fun AlertsSettingsScreen(
     onToggleFavoritesOnly: (Boolean) -> Unit,
     onBack: () -> Unit
 ) {
+    val context = LocalContext.current
+    // The grant happens in a system Settings screen, not this one - re-read
+    // on every resume (not just once on first composition) so coming back
+    // from that screen immediately reflects the new state, matching
+    // HighlightsPlayerScreen.kt's own lifecycle-observer pattern for the
+    // same "state changes somewhere else, re-check on return" shape.
+    var exactAlarmsGranted by remember { mutableStateOf(canScheduleExactAlarms(context)) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) exactAlarmsGranted = canScheduleExactAlarms(context)
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Scaffold(
         containerColor = BackgroundBase,
         topBar = {
@@ -124,6 +167,15 @@ fun AlertsSettingsScreen(
             if (startingSoonEnabled) {
                 HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
                 LeadTimeRow(selectedMinutes = leadTimeMinutes, onSelected = onLeadTimeChange)
+                if (!exactAlarmsGranted) {
+                    ExactAlarmPermissionBanner(
+                        onOpenSettings = {
+                            context.startActivity(
+                                Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM, Uri.parse("package:${context.packageName}"))
+                            )
+                        }
+                    )
+                }
             }
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
@@ -181,6 +233,41 @@ fun AlertsSettingsScreen(
                     colors = SwitchDefaults.colors(checkedTrackColor = TierWorthYourTime)
                 )
             }
+        }
+    }
+}
+
+/**
+ * Shown only while starting-soon is on and the OS hasn't granted precise
+ * alarm timing (Android 12+'s "Alarms & reminders" special access, off by
+ * default since Android 13 - declaring the permission in the manifest alone
+ * doesn't grant it). Without this, StartingSoonScheduler's alarms still
+ * fire, just via the imprecise fallback, which real testing showed the OS
+ * can defer by 30+ minutes - easy for a user to read as "alerts don't
+ * really work in the background" with no obvious cause or fix in sight.
+ */
+@Composable
+private fun ExactAlarmPermissionBanner(onOpenSettings: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp, bottom = 4.dp)
+            .background(TierInstantClassic.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+            .padding(12.dp)
+    ) {
+        Row(verticalAlignment = Alignment.Top) {
+            Icon(imageVector = Icons.Default.WarningAmber, contentDescription = null, tint = TierInstantClassic, modifier = Modifier.padding(top = 1.dp))
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                text = "For precise timing, allow this app to schedule exact alarms in system settings - " +
+                    "otherwise Android may delay a \"starting soon\" alert by 30+ minutes.",
+                color = TextPrimary,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier.weight(1f)
+            )
+        }
+        TextButton(onClick = onOpenSettings, modifier = Modifier.padding(top = 4.dp)) {
+            Text("Open settings", color = TierInstantClassic)
         }
     }
 }
