@@ -396,7 +396,8 @@ fun AppRoot() {
             nflWeights = nflSettingsViewModel.weights,
             nhlWeights = nhlSettingsViewModel.weights,
             defaultTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
-            onBack = { showGameDetail = null }
+            onBack = { showGameDetail = null },
+            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
         )
         return
     }

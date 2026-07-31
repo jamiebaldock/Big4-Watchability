@@ -168,11 +168,12 @@ fun FavoritesScreen(
                             selected = if (onUpcoming) sortOptionUpcoming else sortOptionPast,
                             onSelected = { if (onUpcoming) sortOptionUpcoming = it else sortOptionPast = it },
                             // Upcoming games are always unscored, so rating
-                            // order isn't a meaningful choice there - only
-                            // Past Games keeps the # toggle.
-                            showRatingToggle = !onUpcoming
+                            // order isn't a meaningful choice there - the #
+                            // toggle fades out (rather than disappearing) on
+                            // that page, same as every other screen.
+                            ratingSortEnabled = !onUpcoming
                         )
-                        NumericScoreToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() })
+                        NumericScoreToggleButton(checked = showNumericScore, onCheckedChange = { onToggleNumericScore() }, enabled = !onUpcoming)
                     }
                 },
                 secondary = {

@@ -1,7 +1,6 @@
 package com.nbawatchability.app.ui
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,7 +79,8 @@ fun GameDetailScreen(
     nflWeights: NflRubricWeights,
     nhlWeights: NhlRubricWeights,
     defaultTab: GameDetailTab,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onWatchHighlights: (String) -> Unit
 ) {
     val context = LocalContext.current
     var selectedTab by rememberSaveable(game.id) { mutableStateOf(defaultTab) }
@@ -145,16 +145,12 @@ fun GameDetailScreen(
                         Icon(imageVector = Icons.Default.PlayCircleFilled, contentDescription = null, tint = TierWorthYourTime)
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Watch highlights (opens YouTube)",
+                            text = "Watch highlights",
                             color = TierWorthYourTime,
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        Button(onClick = {
-                            val videoId = game.youtubeVideoId
-                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId"))
-                            context.startActivity(intent)
-                        }) {
+                        Button(onClick = { onWatchHighlights(game.youtubeVideoId!!) }) {
                             Text("Watch")
                         }
                     }

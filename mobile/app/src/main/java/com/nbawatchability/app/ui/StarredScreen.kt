@@ -1,7 +1,6 @@
 package com.nbawatchability.app.ui
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -21,7 +20,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -88,9 +86,14 @@ fun StarredScreen(
     onToggleBell: (Game) -> Unit = {}
 ) {
     var sortOption by remember { mutableStateOf(SortOption.DATE_NEWEST_FIRST) }
-    var actionLabel by remember { mutableStateOf<String?>(null) }
 
     val visibleGames = if (isAllLeaguesSelected) games else games.filter { leagueGroupOf(it) == selectedLeague }
+    // Both the rating-sort and numeric-score icons are meaningless when
+    // nothing currently visible is rated yet - shared here so both actions
+    // below gate on the exact same condition.
+    val hasRatedGame = visibleGames.any {
+        it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null
+    }
 
     Scaffold(
         containerColor = BackgroundBase,
@@ -108,24 +111,22 @@ fun StarredScreen(
                 actions = {
                     SortMenuButton(
                         selected = sortOption,
-                        onSelected = { sortOption = it }
+                        onSelected = { sortOption = it },
+                        ratingSortEnabled = hasRatedGame
                     )
                     NumericScoreToggleButton(
                         checked = showNumericScore,
-                        onCheckedChange = {
-                            onToggleNumericScore()
-                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
-                        }
+                        onCheckedChange = { onToggleNumericScore() },
+                        enabled = hasRatedGame
                     )
                 }
             )
         }
     ) { padding ->
-        Box(modifier = Modifier.fillMaxSize().padding(padding)) {
         PullToRefreshBox(
             isRefreshing = isRefreshing,
             onRefresh = onRefresh,
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier.fillMaxSize().padding(padding)
         ) {
             if (visibleGames.isEmpty()) {
                 Column(
@@ -197,11 +198,6 @@ fun StarredScreen(
                     )
                 }
             }
-        }
-        ActionLabelOverlay(
-            label = actionLabel,
-            modifier = Modifier.align(Alignment.TopEnd).padding(top = 4.dp, end = 4.dp)
-        )
         }
     }
 }

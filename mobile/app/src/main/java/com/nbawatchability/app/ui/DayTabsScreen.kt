@@ -162,6 +162,12 @@ fun DayTabsScreen(
     // page). Defaults to oldest-first (i.e. tipoff order), the natural
     // reading order for a single day's slate.
     var sortOption by remember { mutableStateOf(SortOption.DATE_OLDEST_FIRST) }
+    // Both the rating-sort and numeric-score icons are meaningless on a day
+    // where nothing is rated yet (a future day's slate) - shared here so
+    // both actions below gate on the exact same condition.
+    val currentDayHasRatedGame = days.getOrNull(selectedDayIndex)?.games.orEmpty().any {
+        it.effectiveScore(nbaWeights, wnbaWeights, mlbWeights, nflWeights, nhlWeights) != null
+    }
 
     // settledPage (not currentPage) drives the push-up-to-ViewModel side of
     // this sync deliberately - currentPage changes on every intermediate
@@ -205,22 +211,6 @@ fun DayTabsScreen(
                     )
                 },
                 actions = {
-                    // Always available now - the calendar scrolls freely
-                    // across years and shows real per-day game counts
-                    // (fetched lazily per visible month), so it's useful
-                    // regardless of whether "the current season" happens to
-                    // be loaded for whichever league is selected.
-                    IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
-                        if (isJumpingToDate) {
-                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.CalendarMonth,
-                                contentDescription = "Jump to date",
-                                tint = TextSecondary
-                            )
-                        }
-                    }
                     // Only shown once the viewer has actually wandered off
                     // today's tab (by swiping or via "jump to next game") -
                     // same "only surface it when it'd do something" rule as
@@ -239,16 +229,31 @@ fun DayTabsScreen(
                             }
                         }
                     }
+                    // Always available now - the calendar scrolls freely
+                    // across years and shows real per-day game counts
+                    // (fetched lazily per visible month), so it's useful
+                    // regardless of whether "the current season" happens to
+                    // be loaded for whichever league is selected.
+                    IconButton(onClick = { showCalendar = true }, enabled = !isJumpingToDate) {
+                        if (isJumpingToDate) {
+                            CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                        } else {
+                            Icon(
+                                imageVector = Icons.Default.CalendarMonth,
+                                contentDescription = "Jump to date",
+                                tint = TextSecondary
+                            )
+                        }
+                    }
                     SortMenuButton(
                         selected = sortOption,
-                        onSelected = { sortOption = it }
+                        onSelected = { sortOption = it },
+                        ratingSortEnabled = currentDayHasRatedGame
                     )
                     NumericScoreToggleButton(
                         checked = showNumericScore,
-                        onCheckedChange = {
-                            onToggleNumericScore()
-                            actionLabel = if (it) "Showing numeric score" else "Hiding numeric score"
-                        }
+                        onCheckedChange = { onToggleNumericScore() },
+                        enabled = currentDayHasRatedGame
                     )
                 },
                 secondary = {

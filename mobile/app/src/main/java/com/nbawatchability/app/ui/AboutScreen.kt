@@ -331,7 +331,7 @@ private fun AboutExpandableItem(title: String, body: String, trailingDivider: Bo
             Text(
                 text = body,
                 color = TextSecondary,
-                style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp),
+                style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp),
                 modifier = Modifier.padding(bottom = 14.dp)
             )
         }
@@ -360,7 +360,7 @@ private fun AboutLinkRow(
         Column {
             Text(text = label, color = TextPrimary, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp))
             if (sublabel != null) {
-                Text(text = sublabel, color = TextMuted, style = MaterialTheme.typography.bodySmall.copy(fontSize = 14.sp))
+                Text(text = sublabel, color = TextMuted, style = MaterialTheme.typography.bodyMedium.copy(fontSize = 16.sp))
             }
         }
         Icon(imageVector = icon, contentDescription = null, tint = TextMuted)

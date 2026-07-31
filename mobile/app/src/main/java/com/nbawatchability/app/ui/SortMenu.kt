@@ -45,32 +45,35 @@ enum class SortOption(val label: String) {
  * (whichever is the more commonly useful first look at that axis) rather
  * than preserving whatever direction that axis last had.
  *
- * [showRatingToggle] hides the # button entirely (e.g. Favorites' Upcoming
- * Games page, where every game is unscored and rating order isn't a
- * meaningful choice) - callers that hide it are expected to never pass a
- * RATING_* [selected] value in that state.
+ * [ratingSortEnabled] fades the # button and makes it non-interactive
+ * (rather than hiding it) whenever every game currently on screen is
+ * unscored - e.g. a future day on the Games tab, or Favorites' Upcoming
+ * Games page - so it's visibly obvious rating order isn't a meaningful
+ * choice right now, instead of the button just silently vanishing. Callers
+ * that pass false are expected to never pass a RATING_* [selected] value in
+ * that state.
  */
 @Composable
-fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit, showRatingToggle: Boolean = true) {
+fun SortMenuButton(selected: SortOption, onSelected: (SortOption) -> Unit, ratingSortEnabled: Boolean = true) {
     Row {
-        if (showRatingToggle) {
-            SortToggleButton(
-                icon = Icons.Filled.Tag,
-                isActive = selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST,
-                pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
-                activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
-                onClick = {
-                    onSelected(
-                        if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
-                    )
-                }
-            )
-        }
+        SortToggleButton(
+            icon = Icons.Filled.Tag,
+            isActive = ratingSortEnabled && (selected == SortOption.RATING_HIGHEST_FIRST || selected == SortOption.RATING_LOWEST_FIRST),
+            pointsUp = selected == SortOption.RATING_LOWEST_FIRST,
+            activeLabel = if (selected == SortOption.RATING_LOWEST_FIRST) "Lowest rated first" else "Highest rated first",
+            enabled = ratingSortEnabled,
+            onClick = {
+                onSelected(
+                    if (selected == SortOption.RATING_HIGHEST_FIRST) SortOption.RATING_LOWEST_FIRST else SortOption.RATING_HIGHEST_FIRST
+                )
+            }
+        )
         SortToggleButton(
             icon = Icons.Filled.CalendarMonth,
             isActive = selected == SortOption.DATE_OLDEST_FIRST || selected == SortOption.DATE_NEWEST_FIRST,
             pointsUp = selected != SortOption.DATE_NEWEST_FIRST,
             activeLabel = if (selected == SortOption.DATE_NEWEST_FIRST) "Newest first" else "Oldest first",
+            enabled = true,
             onClick = {
                 onSelected(
                     if (selected == SortOption.DATE_OLDEST_FIRST) SortOption.DATE_NEWEST_FIRST else SortOption.DATE_OLDEST_FIRST
@@ -86,10 +89,15 @@ private fun SortToggleButton(
     isActive: Boolean,
     pointsUp: Boolean,
     activeLabel: String,
+    enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val tint = if (isActive) TierWorthYourTime else TextSecondary
-    IconButton(onClick = onClick) {
+    val tint = when {
+        !enabled -> TextSecondary.copy(alpha = 0.35f)
+        isActive -> TierWorthYourTime
+        else -> TextSecondary
+    }
+    IconButton(onClick = onClick, enabled = enabled) {
         Box(modifier = Modifier.size(28.dp)) {
             Icon(
                 imageVector = icon,

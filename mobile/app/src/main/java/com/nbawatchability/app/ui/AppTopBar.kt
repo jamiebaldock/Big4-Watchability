@@ -128,14 +128,25 @@ fun <T> NavChipRow(items: List<T>, selected: T, onSelected: (T) -> Unit, label: 
     }
 }
 
-/** The hashtag icon - toggles whether GameCard's tier badge also shows the raw numeric score. Shared by every tab that renders GameCard tiles (Games, Starred, History, Favorites' Games pages). */
+/**
+ * The hashtag icon - toggles whether GameCard's tier badge also shows the raw
+ * numeric score. Shared by every tab that renders GameCard tiles (Games,
+ * Starred, History, Favorites' Games pages). [enabled] fades it out and
+ * makes it non-interactive wherever nothing on screen is rated yet (a future
+ * day's slate) - there's no numeric score to reveal for an unplayed game,
+ * same reasoning as SortMenuButton's [ratingSortEnabled].
+ */
 @Composable
-fun NumericScoreToggleButton(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
-    IconToggleButton(checked = checked, onCheckedChange = onCheckedChange) {
+fun NumericScoreToggleButton(checked: Boolean, onCheckedChange: (Boolean) -> Unit, enabled: Boolean = true) {
+    IconToggleButton(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled) {
         Icon(
             imageVector = Icons.Default.Tag,
             contentDescription = "Show numeric score",
-            tint = if (checked) TierWorthYourTime else TextSecondary
+            tint = when {
+                !enabled -> TextSecondary.copy(alpha = 0.35f)
+                checked -> TierWorthYourTime
+                else -> TextSecondary
+            }
         )
     }
 }

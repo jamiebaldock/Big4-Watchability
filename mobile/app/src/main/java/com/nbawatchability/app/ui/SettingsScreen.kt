@@ -1,8 +1,8 @@
 package com.nbawatchability.app.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -26,8 +27,6 @@ import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Wifi
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -35,6 +34,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -47,8 +47,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
+import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 import com.nbawatchability.app.ui.theme.TextMuted
 import com.nbawatchability.app.ui.theme.TextPrimary
 import com.nbawatchability.app.ui.theme.TextSecondary
@@ -353,38 +355,61 @@ fun SettingsScreen(
     }
 }
 
-/** Which tab the app opens on - a plain tap-to-open DropdownMenu rather than a full picker screen, since there are only 7 options. */
+/**
+ * Which tab the app opens on - a centered picker dialog rather than a plain
+ * DropdownMenu (whose default Material3 container color isn't customized
+ * anywhere in Theme.kt, so it fell back to stock Material's baseline tone -
+ * a poor contrast match against this app's actual near-black/off-white
+ * palette - and which anchors wherever the tapped row happens to sit on
+ * screen rather than centering). Same Dialog + SurfaceCardElevated +
+ * rounded-corner convention SeasonCalendarDialog.kt already uses elsewhere
+ * in the app, with an explicit accent border added for definition and
+ * titleMedium (not the default DropdownMenuItem text size) for legibility.
+ */
 @Composable
 private fun DefaultLandingTabRow(selectedTab: BottomNavTab, onTabSelected: (BottomNavTab) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = TextSecondary)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "Default tab", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = selectedTab.label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
-            }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = true }
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = TextSecondary)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = "Default tab", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            BottomNavTab.entries.forEach { tab ->
-                DropdownMenuItem(
-                    text = { Text(tab.label) },
-                    onClick = {
-                        onTabSelected(tab)
-                        expanded = false
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = selectedTab.label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+        }
+    }
+    if (expanded) {
+        Dialog(onDismissRequest = { expanded = false }) {
+            Surface(
+                color = SurfaceCardElevated,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(2.dp, TierWorthYourTime)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    BottomNavTab.entries.forEach { tab ->
+                        Text(
+                            text = tab.label,
+                            color = if (tab == selectedTab) TierWorthYourTime else TextPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onTabSelected(tab)
+                                    expanded = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp)
+                        )
                     }
-                )
+                }
             }
         }
     }
@@ -396,38 +421,57 @@ private val GameDetailTab.label: String
         GameDetailTab.TOP_PERFORMERS -> "Top Performers"
     }
 
-/** Which of the game-detail popup's two tabs shows first when it opens - same tap-to-open dropdown pattern as DefaultLandingTabRow above, just 2 options instead of 7. */
+/**
+ * Which of the game-detail popup's two tabs shows first when it opens - same
+ * centered-dialog picker as DefaultLandingTabRow above (see that function's
+ * comment for why: a plain DropdownMenu here read as low-contrast against
+ * this app's actual dark palette and anchored to wherever the row sat rather
+ * than centering), just 2 options instead of 7.
+ */
 @Composable
 private fun DefaultGameDetailTabRow(selectedTab: GameDetailTab, onTabSelected: (GameDetailTab) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
-    Box {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clickable { expanded = true }
-                .padding(vertical = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = TextSecondary)
-                Spacer(modifier = Modifier.width(12.dp))
-                Text(text = "Default game-detail tab", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
-            }
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(text = selectedTab.label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
-                Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
-            }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { expanded = true }
+            .padding(vertical = 16.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(imageVector = Icons.AutoMirrored.Filled.List, contentDescription = null, tint = TextSecondary)
+            Spacer(modifier = Modifier.width(12.dp))
+            Text(text = "Default game-detail tab", color = TextPrimary, style = MaterialTheme.typography.bodyMedium)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            GameDetailTab.entries.forEach { tab ->
-                DropdownMenuItem(
-                    text = { Text(tab.label) },
-                    onClick = {
-                        onTabSelected(tab)
-                        expanded = false
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(text = selectedTab.label, color = TextSecondary, style = MaterialTheme.typography.bodyMedium)
+            Icon(imageVector = Icons.Default.ChevronRight, contentDescription = null, tint = TextMuted)
+        }
+    }
+    if (expanded) {
+        Dialog(onDismissRequest = { expanded = false }) {
+            Surface(
+                color = SurfaceCardElevated,
+                shape = RoundedCornerShape(16.dp),
+                border = BorderStroke(2.dp, TierWorthYourTime)
+            ) {
+                Column(modifier = Modifier.padding(vertical = 8.dp)) {
+                    GameDetailTab.entries.forEach { tab ->
+                        Text(
+                            text = tab.label,
+                            color = if (tab == selectedTab) TierWorthYourTime else TextPrimary,
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    onTabSelected(tab)
+                                    expanded = false
+                                }
+                                .padding(horizontal = 24.dp, vertical = 14.dp)
+                        )
                     }
-                )
+                }
             }
         }
     }
