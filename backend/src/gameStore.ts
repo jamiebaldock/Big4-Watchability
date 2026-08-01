@@ -1182,7 +1182,16 @@ function seasonStartDateForLabel(label: string, leagueGroup: LeagueGroup): strin
  * season + 2 named seasons + All time) while still giving All time the
  * full 23-season pool to draw its real top games from.
  */
-const BARN_BURNER_EVENT_IDS = ["401585278", "401468287", "401236276", "401071241"];
+const BARN_BURNER_EVENT_IDS = [
+  // NBA historical 90+ games (2017-18 through 2023-24)
+  "401585278", "401468287", "401236276", "401071241",
+  // NFL historical 90+ games (2012-2023)
+  "320923018", "320930022", "321118034", "321122008", "330112007", "330929034", "331006006", "331124017",
+  "331201002", "400554215", "400554210", "400554361", "400791550", "400791492", "400791629", "400791602",
+  "400874505", "400874676", "400874690", "400927752", "400951661", "400951729", "401030843", "401030930",
+  "401030771", "401030972", "401030870", "401127981", "401127994", "401220242", "401220338", "401326360",
+  "401326420", "401326443", "401437833", "401437904", "401437910", "401547484", "401547558", "401547570",
+];
 const MLB_NAMED_SEASON_CUTOFF_YEAR = 2024;
 
 export function getSeasonLabels(leagueGroup: LeagueGroup): string[] {
