@@ -46,6 +46,9 @@ const ALL_TIME_MIN_SCORE_NFL = 90;
 // (ESPN just returns no events for the empty days) - same convention every
 // other backfill script in this codebase uses.
 const SEASON_WINDOWS: Record<string, { start: string; end: string }> = {
+  "2015": { start: "2015-08-25", end: "2016-02-20" },
+  "2016": { start: "2016-08-25", end: "2017-02-20" },
+  "2017": { start: "2017-08-25", end: "2018-02-20" },
   "2018": { start: "2018-08-25", end: "2019-02-20" },
   "2019": { start: "2019-08-25", end: "2020-02-20" },
   "2020": { start: "2020-08-25", end: "2021-02-20" },
