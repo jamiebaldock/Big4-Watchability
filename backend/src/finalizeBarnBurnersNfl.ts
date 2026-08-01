@@ -65,7 +65,7 @@ async function fetchSummary(eventId: string): Promise<any> {
 
 function loadBarnBurners(): BarnBurner[] {
   const all: BarnBurner[] = [];
-  for (const seasonLabel of ["2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023"]) {
+  for (const seasonLabel of ["2001", "2002", "2003", "2004", "2005", "2006", "2007", "2008", "2009", "2010", "2011", "2012", "2013", "2014", "2015", "2016", "2017", "2018", "2019", "2020", "2021", "2022", "2023"]) {
     const path = join(DATA_DIR, `nflBarnBurners_${seasonLabel}.json`);
     if (!existsSync(path)) {
       console.log(`  (skipping ${seasonLabel} - no nflBarnBurners_${seasonLabel}.json yet)`);
