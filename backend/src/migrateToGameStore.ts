@@ -479,7 +479,19 @@ export function migrateHistoricalBackfill(): void {
   // 2025 and 2024 are two separate files/completedDates-resume-state (see
   // backfillRawStatsNfl2024.ts's own header comment for why) - both feed the
   // same NFL migration function, just called twice.
-  const nflCount = runOnceEver("nfl_recent_2024_2025", () => migrateNflFile("nflRawStats.json") + migrateNflFile("nflRawStats2024.json"));
+  const nflRecentCount = runOnceEver("nfl_recent_2024_2025", () => migrateNflFile("nflRawStats.json") + migrateNflFile("nflRawStats2024.json"));
+  // Minimal-footprint shape for NFL's older-seasons backfill (same approach
+  // as MLB's barn burner migration): nflHistoricalBarnBurners.json (built by
+  // finalizeBarnBurnersNfl.ts) contains only the 9 games that clear NFL's
+  // All-time bar (90+) across 2021-2023 seasons, found via a two-phase
+  // margin<=8 pre-filter search (investigateNflBarnBurners.ts). No full
+  // season backfill is collected; only these curated qualifying games get
+  // migrated into the live database.
+  const nflHistoricalCount = runOnceEver("nfl_historical_barnburners", () => {
+    const fileName = "nflHistoricalBarnBurners.json";
+    return existsSync(join(DATA_DIR, fileName)) ? migrateNflFile(fileName) : 0;
+  });
+  const nflCount = nflRecentCount + nflHistoricalCount;
   // Same reasoning as NFL above - 2025-26 and 2024-25 are separate files/
   // resume-state (see backfillRawStatsNhl2024.ts's own header comment).
   const nhlCount = runOnceEver("nhl_recent_2024_2025", () => migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json"));
