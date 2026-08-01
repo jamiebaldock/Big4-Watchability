@@ -149,7 +149,20 @@ private val EaseInAccelerating = Easing { fraction -> fraction * fraction }
  */
 suspend fun LazyListState.animateScrollToTopAdaptively() {
     val startIndex = firstVisibleItemIndex
-    if (startIndex <= 0) return
+    if (startIndex <= 0) {
+        // Index alone isn't enough - LazyColumn's key-based item tracking
+        // (see the class doc above) commonly leaves the list sitting at
+        // index 0 but scrolled deep INTO that item (a large
+        // firstVisibleItemScrollOffset) right after a re-sort/re-filter
+        // shuffles a previously off-screen tile into the new first slot -
+        // confirmed live (WNBA, a short 4-game day: index=0, offset=383px)
+        // as the actual cause of the reported "list not scrolling all the
+        // way back to top" bug. The animation loop below is index-driven
+        // and would never move (startIndex already 0), so this needs its
+        // own snap rather than falling into that loop.
+        if (firstVisibleItemScrollOffset > 0) scrollToItem(0)
+        return
+    }
 
     val shortHop = startIndex <= 8
     val durationMillis = (600 + startIndex * 25).coerceIn(600, 2200)
