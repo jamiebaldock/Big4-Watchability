@@ -499,7 +499,12 @@ export function migrateHistoricalBackfill(): void {
   // different file contents across pushes. migrateNflFile is a plain
   // upsert-by-event_id, so re-running it here for all 70 rows (9 of which
   // already landed under the old flag) is safe - no duplicates possible.
-  const nflHistoricalCount = runOnceEver("nfl_historical_barnburners_v2", () => {
+  // Renamed again to _v3 (2026-08-02): 2010 and 2011 were never actually run
+  // by investigateNflBarnBurners.ts despite being in its SEASON_WINDOWS -
+  // caught while resuming this same backfill. File grew from 70 to 72 games
+  // (2 new from 2010; 2011 genuinely had zero qualifying games). Same safe
+  // re-run reasoning as the _v2 bump above.
+  const nflHistoricalCount = runOnceEver("nfl_historical_barnburners_v3", () => {
     const fileName = "nflHistoricalBarnBurners.json";
     return existsSync(join(DATA_DIR, fileName)) ? migrateNflFile(fileName) : 0;
   });
