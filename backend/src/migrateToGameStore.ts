@@ -506,7 +506,12 @@ export function migrateHistoricalBackfill(): void {
   const nflCount = nflRecentCount + nflHistoricalCount;
   // Same reasoning as NFL above - 2025-26 and 2024-25 are separate files/
   // resume-state (see backfillRawStatsNhl2024.ts's own header comment).
-  const nhlCount = runOnceEver("nhl_recent_2024_2025", () => migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json"));
+  const nhlRecentCount = runOnceEver("nhl_recent_2024_2025", () => migrateNhlFile("nhlRawStats.json") + migrateNhlFile("nhlRawStats2024.json"));
+  const nhlHistoricalCount = runOnceEver("nhl_historical_barnburners", () => {
+    const fileName = "nhlHistoricalBarnBurners.json";
+    return existsSync(join(DATA_DIR, fileName)) ? migrateNhlFile(fileName) : 0;
+  });
+  const nhlCount = nhlRecentCount + nhlHistoricalCount;
   console.log(
     `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore ` +
       `(0 for any league means it was already fully migrated in a prior run and skipped this boot); pruned ${mlbPrunedCount} over-collected pre-2024 MLB rows down to just the games that clear the All-time bar.`
