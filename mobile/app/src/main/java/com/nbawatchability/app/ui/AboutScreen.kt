@@ -197,13 +197,13 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                     "score - it only surfaces games that scored high enough to be worth revisiting, " +
                     "not every game played. That's a stricter bar than the tier badges shown elsewhere, " +
                     "so an occasional \"Worth Your Time\" game might not make the cut here.\n\n" +
-                    "🔥 All time holds itself to a much higher bar again - it's meant to be " +
-                    "the best games that league has ever recorded, not just a good one, so a game can " +
-                    "clear the regular History cutoff for its season and still not make the All-time " +
-                    "cut. For NBA, All time also reaches back further than the season chips do - " +
-                    "2017-18 through 2023-24 have only been checked for the very best games (the same " +
-                    "All-time bar, not the regular cutoff), while 2024-25 and 2025-26 are the full " +
-                    "archive at the regular cutoff. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
+                    "🔥 All time narrows things further still - instead of a score cutoff, it's " +
+                    "simply each league's top 20 games of all time, ranked by score, so a game can " +
+                    "clear the regular History cutoff for its season and still not crack that top 20. " +
+                    "For NBA, All time also reaches back further than the season chips do - " +
+                    "2017-18 through 2023-24 have only been checked for the very best games (enough to " +
+                    "know if they'd rank among the all-time best, not a full season archive), while " +
+                    "2024-25 and 2025-26 are the full archive at the regular cutoff. Breakdowns stay spoiler-blurred by default even for old games - tap one to " +
                     "reveal it, or flip the default in Settings."
             )
             AboutExpandableItem(
