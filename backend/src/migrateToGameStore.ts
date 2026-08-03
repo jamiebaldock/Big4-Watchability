@@ -39,6 +39,7 @@ import { computeNflWatchabilityScore, NflRubricInputs, tierForNflScore } from ".
 import { COMPETITION_LABEL as NHL_COMPETITION_LABEL } from "./nhlGamesService";
 import { computeNhlWatchabilityScore, NhlRubricInputs, tierForNhlScore } from "./nhlRubric";
 import { LeagueGroup, StarPerformance } from "./types";
+import { syncAllEcals } from "./ecalSync";
 
 interface HistoricalGame {
   eventId: string;
@@ -524,10 +525,23 @@ export function migrateHistoricalBackfill(): void {
   // teamLogos.ts's dark-variant list - see refreshDarkVariantLogos's own
   // doc comment for why upsertBaseEntry alone can't self-heal these.
   const darkLogoRefreshCount = runOnceEver("dark_variant_logo_refresh_2026_08_03", refreshDarkVariantLogos);
+
+  // Sync official e-calendars (NBA, NHL, MLB) to catch tipoff-time corrections
+  // that may differ from ESPN's data. Runs asynchronously in the background so
+  // it doesn't block HTTP startup - if an e-calendar fetch fails, the app still
+  // starts normally (ESPN data is the fallback).
+  syncAllEcals()
+    .then((results) => {
+      console.log(`[ecalSync] completed: ${JSON.stringify(results)}`);
+    })
+    .catch((err) => {
+      console.error(`[ecalSync] failed:`, err);
+    });
+
   console.log(
     `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore ` +
       `(0 for any league means it was already fully migrated in a prior run and skipped this boot); pruned ${mlbPrunedCount} over-collected pre-2024 MLB rows down to just the games that clear the All-time bar; ` +
-      `refreshed ${darkLogoRefreshCount} stored logo URLs to their dark-variant equivalent.`
+      `refreshed ${darkLogoRefreshCount} stored logo URLs to their dark-variant equivalent. E-calendar sync running in background.`
   );
 }
 

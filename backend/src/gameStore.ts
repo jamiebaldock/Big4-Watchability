@@ -1352,6 +1352,44 @@ export function getSearchOutcomeCounts(sinceDays = 7): Record<HighlightsSearchOu
   return counts;
 }
 
+/**
+ * Look up a game by league, teams, and approximate tipoff time.
+ * Used by ecalSync to find stored games that need tipoff-time corrections.
+ * Matches by league and teams, with tipoff within 24 hours to account for
+ * timezone-parsing differences.
+ */
+export function getGameByLeagueAndTeamsAndDate(
+  league: AnyLeague,
+  awayTeam: string,
+  homeTeam: string,
+  tipoffUtc: string,
+): RawGameRow | null {
+  // Parse the target tipoff time
+  const targetTime = new Date(tipoffUtc).getTime();
+  if (isNaN(targetTime)) return null;
+
+  // Query games with matching league and teams, within 24 hours
+  const rows = db
+    .prepare(
+      `SELECT * FROM games WHERE league = ? AND away = ? AND home = ? AND tipoff_utc IS NOT NULL LIMIT 1`,
+    )
+    .all(league, awayTeam, homeTeam) as RawGameRow[];
+
+  if (!rows.length) return null;
+
+  // Return the first match (should only be one per day)
+  return rows[0];
+}
+
+/**
+ * Update a game's tipoff_utc to match the official e-calendar.
+ * Only updates if the current tipoff_utc is not null (game already loaded);
+ * never overwrites a null tipoff (which would indicate a parsing/metadata issue).
+ */
+export function updateTipoffTime(eventId: string, newTipoffUtc: string): void {
+  db.prepare(`UPDATE games SET tipoff_utc = ? WHERE event_id = ? AND tipoff_utc IS NOT NULL`).run(newTipoffUtc, eventId);
+}
+
 export function closeDb(): void {
   db.close();
 }
