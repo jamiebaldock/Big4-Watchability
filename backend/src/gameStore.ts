@@ -25,6 +25,7 @@ import { League } from "./espnClient";
 import { MlbRubricInputs } from "./mlbRubric";
 import { NflRubricInputs } from "./nflRubric";
 import { NhlRubricInputs } from "./nhlRubric";
+import { preferDarkLogoVariant } from "./teamLogos";
 import { GameStatus, LeagueGroup, SPORT_FOR_LEAGUE_GROUP, StandoutPerformerJson, StarPerformance } from "./types";
 
 // A game row's own "league" column is one specific ESPN league (basketball's
@@ -159,6 +160,34 @@ export function pruneOlderSeasonsExcept(leagueGroup: LeagueGroup, beforeYear: nu
     )
     .run(leagueGroup, beforeYear, ...keepEventIds);
   return result.changes;
+}
+
+/**
+ * One-off repair for game rows whose away_logo/home_logo were captured
+ * before their team was added to teamLogos.ts's DARK_VARIANT_URL_PATTERNS -
+ * upsertBaseEntry only ever INSERTs a game's logo columns once (INSERT OR
+ * IGNORE), so every row collected before a given team's pattern existed
+ * keeps its original, non-swapped URL forever, regardless of how many times
+ * that same game gets re-polled afterward. Every other surface (Favorites
+ * team list, standings, stats) computes its logo URL fresh on every
+ * request via preferDarkLogoVariant, so those picked up e.g. the Padres fix
+ * immediately - this is what lets already-stored game tiles catch up to
+ * match them, rather than staying stuck with whatever was true at
+ * collection time.
+ */
+export function refreshDarkVariantLogos(): number {
+  let changed = 0;
+  for (const column of ["away_logo", "home_logo"] as const) {
+    const rows = db.prepare(`SELECT DISTINCT ${column} as url FROM games WHERE ${column} IS NOT NULL`).all() as { url: string }[];
+    for (const { url } of rows) {
+      const fixed = preferDarkLogoVariant(url);
+      if (fixed && fixed !== url) {
+        const result = db.prepare(`UPDATE games SET ${column} = ? WHERE ${column} = ?`).run(fixed, url);
+        changed += result.changes;
+      }
+    }
+  }
+  return changed;
 }
 
 // Added after the initial release - ensureColumn (not a second CREATE TABLE

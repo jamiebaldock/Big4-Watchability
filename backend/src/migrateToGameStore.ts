@@ -24,6 +24,7 @@ import {
   isMigrationComplete,
   markMigrationComplete,
   pruneOlderSeasonsExcept,
+  refreshDarkVariantLogos,
   setFinalRubric,
   setMlbFinalRubric,
   setNflFinalRubric,
@@ -517,9 +518,16 @@ export function migrateHistoricalBackfill(): void {
     return existsSync(join(DATA_DIR, fileName)) ? migrateNhlFile(fileName) : 0;
   });
   const nhlCount = nhlRecentCount + nhlHistoricalCount;
+  // Catches up already-stored game rows (Padres, Rockies, Tigers, and the
+  // other 11 teams from "Fix dark-theme logo contrast for 14 teams") whose
+  // away_logo/home_logo were written before their team was added to
+  // teamLogos.ts's dark-variant list - see refreshDarkVariantLogos's own
+  // doc comment for why upsertBaseEntry alone can't self-heal these.
+  const darkLogoRefreshCount = runOnceEver("dark_variant_logo_refresh_2026_08_03", refreshDarkVariantLogos);
   console.log(
     `migrateHistoricalBackfill: verified ${nbaCount} NBA, ${wnbaCount} WNBA, ${mlbCount} MLB, ${nflCount} NFL, and ${nhlCount} NHL historical games are present in gameStore ` +
-      `(0 for any league means it was already fully migrated in a prior run and skipped this boot); pruned ${mlbPrunedCount} over-collected pre-2024 MLB rows down to just the games that clear the All-time bar.`
+      `(0 for any league means it was already fully migrated in a prior run and skipped this boot); pruned ${mlbPrunedCount} over-collected pre-2024 MLB rows down to just the games that clear the All-time bar; ` +
+      `refreshed ${darkLogoRefreshCount} stored logo URLs to their dark-variant equivalent.`
   );
 }
 
