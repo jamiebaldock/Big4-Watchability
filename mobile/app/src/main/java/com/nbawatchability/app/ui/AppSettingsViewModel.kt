@@ -35,7 +35,20 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         }
     }
 
+    // Updates [settings] in memory immediately, not just via the DataStore
+    // round-trip - repository.setSelectedLeague's write is async disk I/O,
+    // and the ONLY other place [settings] gets updated is the init block's
+    // collect above, which doesn't see that write until DataStore re-emits
+    // (a real, measurable gap, not instant). Without this optimistic update,
+    // switching league on one tab and immediately navigating to another
+    // (e.g. Favorites' dropdown -> tapping into Games) could read the OLD
+    // selectedLeague for that first frame - confirmed live as the reported
+    // bug (Favorites: switch league A->B, tap Schedule, League A's games
+    // flash before jumping to B). The eventual DataStore-driven re-emission
+    // still lands afterward, but by then it's just re-confirming the same
+    // value already set here, so it's a no-op rather than a second flip.
     fun setSelectedLeague(league: LeagueGroup) {
+        settings = settings.copy(selectedLeague = league)
         viewModelScope.launch { repository.setSelectedLeague(league) }
     }
 
@@ -75,7 +88,12 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         viewModelScope.launch { repository.setDefaultGameDetailTab(tabName) }
     }
 
+    // Same optimistic-update reasoning as setSelectedLeague above - selectLeague
+    // calls this right before setSelectedLeague, so without this, the same
+    // DataStore round-trip gap would apply here too (a stale isAllLeaguesSelected
+    // read feeding GamesTab's leagueGroups computation alongside the stale league).
     fun setAllLeaguesSelected(value: Boolean) {
+        settings = settings.copy(isAllLeaguesSelected = value)
         viewModelScope.launch { repository.setAllLeaguesSelected(value) }
     }
 
@@ -93,10 +111,18 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
      * (TitleLeagueSelector's per-league menu items all call this same
      * callback), rather than each tab re-implementing "unset All Leagues
      * when a specific league is picked" on its own.
+     *
+     * Persists both fields as ONE DataStore transaction
+     * (setSelectedLeagueAndUnsetAllLeagues), not two separate calls to
+     * setSelectedLeague/setAllLeaguesSelected - see that repository method's
+     * own doc comment for why calling them separately let an intermediate,
+     * half-updated DataStore emission clobber this function's optimistic
+     * settings update back to the OLD league for a frame (the reported
+     * Favorites-switch-then-tap-Schedule flash).
      */
     fun selectLeague(league: LeagueGroup) {
-        setAllLeaguesSelected(false)
-        setSelectedLeague(league)
+        settings = settings.copy(selectedLeague = league, isAllLeaguesSelected = false)
+        viewModelScope.launch { repository.setSelectedLeagueAndUnsetAllLeagues(league) }
     }
 
     /**
@@ -113,11 +139,13 @@ class AppSettingsViewModel(application: Application) : AndroidViewModel(applicat
         val updated = if (league in current) current - league else current + league
         if (updated.isEmpty()) return
 
-        viewModelScope.launch {
-            repository.setEnabledLeagues(updated)
-            if (settings.selectedLeague !in updated) {
-                repository.setSelectedLeague(updated.find { it == LeagueGroup.NBA } ?: updated.first())
-            }
+        viewModelScope.launch { repository.setEnabledLeagues(updated) }
+        if (settings.selectedLeague !in updated) {
+            // Routed through the class's own setSelectedLeague (not
+            // repository.setSelectedLeague directly) so this fallback picks up
+            // the same optimistic in-memory update as every other league
+            // switch - same DataStore-round-trip gap would otherwise apply here.
+            setSelectedLeague(updated.find { it == LeagueGroup.NBA } ?: updated.first())
         }
     }
 }

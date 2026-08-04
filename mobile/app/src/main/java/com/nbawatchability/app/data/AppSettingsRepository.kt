@@ -130,6 +130,32 @@ class AppSettingsRepository(private val context: Context) {
         context.appSettingsDataStore.edit { it[SELECTED_LEAGUE_KEY] = league.apiValue }
     }
 
+    /**
+     * Same write as [setSelectedLeague] plus turning "All Leagues" off, but as
+     * ONE DataStore transaction instead of two separate suspend calls each
+     * doing its own edit{}. Matters because [context.appSettingsDataStore.data]
+     * (the Flow every AppSettingsViewModel.settings read ultimately comes
+     * from) emits once per COMMITTED edit{} - two separate edit{} calls (even
+     * fired back-to-back from the same calling coroutine) commit and emit
+     * independently, so the first commit's emission can land with the OTHER
+     * field still holding its OLD on-disk value. AppSettingsViewModel.selectLeague
+     * used to call setAllLeaguesSelected(false) then setSelectedLeague(league)
+     * separately - the isAllLeaguesSelected=false emission could arrive with
+     * selectedLeague still reading the OLD league (that edit{} hadn't
+     * committed yet), clobbering the ViewModel's own optimistic in-memory
+     * update back to the old league for one frame before the second emission
+     * corrected it - confirmed live as the reported bug (Favorites: switch
+     * league, tap Schedule, old league's games flash before the new league's
+     * land). A single edit{} means a single emission with both fields already
+     * correct together - no intermediate state to observe.
+     */
+    suspend fun setSelectedLeagueAndUnsetAllLeagues(league: LeagueGroup) {
+        context.appSettingsDataStore.edit {
+            it[SELECTED_LEAGUE_KEY] = league.apiValue
+            it[ALL_LEAGUES_SELECTED_KEY] = false
+        }
+    }
+
     suspend fun setShowNumericScore(value: Boolean) {
         context.appSettingsDataStore.edit { it[SHOW_NUMERIC_SCORE_KEY] = value }
     }

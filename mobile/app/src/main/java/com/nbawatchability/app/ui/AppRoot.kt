@@ -725,7 +725,23 @@ private fun GamesTab(
     // the app while on a different tab doesn't refresh Games in the background.
     LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { viewModel.refresh() }
 
-    when (val state = viewModel.uiState) {
+    // viewModel is Activity-scoped (obtained via viewModel() with no back-
+    // stack entry of its own), so it's the SAME instance whether this tab is
+    // currently composed or not - switching away and back doesn't recreate
+    // it. If the league was changed from another tab (e.g. Favorites' league
+    // dropdown, which shares the same appSettingsViewModel.selectedLeague)
+    // and the user then taps into Games, this composable's first frame would
+    // otherwise render viewModel.uiState as-is - still whatever was Loaded
+    // for the OLD league from the last time Games was visited, since
+    // LaunchedEffect(selectedLeague) above hasn't had a chance to call
+    // load() yet (that's scheduled a frame later, not synchronous with this
+    // composition). Reading viewModel.uiState unconditionally into
+    // liveUiState first keeps this composable subscribed to it for
+    // recomposition even on the frames where the override below applies.
+    val liveUiState = viewModel.uiState
+    val effectiveState = if (viewModel.loadedForLeagueGroups != leagueGroups) ScheduleUiState.Loading else liveUiState
+
+    when (val state = effectiveState) {
         is ScheduleUiState.Loading -> LoadingScreen()
         is ScheduleUiState.Error -> ErrorScreen(state.message, onRetry = { viewModel.load(leagueGroups) })
         is ScheduleUiState.Loaded -> DayTabsScreen(

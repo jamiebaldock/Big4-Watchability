@@ -92,6 +92,18 @@ class GameListViewModel : ViewModel() {
     // see fetchScheduleChunked below.
     private var currentLeagueGroups: List<LeagueGroup> = listOf(LeagueGroup.NBA)
 
+    // Public read-only view of the above - lets a caller (AppRoot's GamesTab)
+    // tell whether [uiState] actually reflects the league(s) it's currently
+    // asking for, or is still leftover from whatever this ViewModel-instance
+    // (Activity-scoped, so it outlives switching away from and back to the
+    // Games tab) last had loaded before its LaunchedEffect(selectedLeague) had
+    // a chance to fire. Without this check, a league switch made from another
+    // tab (e.g. Favorites) - then tapping into Games - renders one stale frame
+    // of the OLD league's schedule before load()'s coroutine catches up,
+    // because reading [uiState] during composition happens synchronously but
+    // LaunchedEffect's call to load() is scheduled a frame later.
+    val loadedForLeagueGroups: List<LeagueGroup> get() = currentLeagueGroups
+
     // Center of the currently-loaded +/-7 day window - only used when
     // [seasonRange] is null. Starts at "today" but moves when jumpToDate()
     // re-centers the window on a date outside the previously-loaded range.
