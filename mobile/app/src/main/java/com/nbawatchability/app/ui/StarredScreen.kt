@@ -168,8 +168,17 @@ fun StarredScreen(
             // skip the scroll-to-top animation. Also keyed on the min-tier
             // filter (line 160 above) for the same reason DayTabsScreen's
             // identical effect is - toggling it reshuffles/shortens the same
-            // list without a re-sort.
-            LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter) { listState.animateScrollToTopAdaptively() }
+            // list without a re-sort. Also keyed on selectedLeague/
+            // isAllLeaguesSelected (visibleGames' own filter, line 90) and
+            // bumpFavoriteTeamGames/favoriteTeamNames (the bump reorder,
+            // line 161) - both reshuffle `ordered` the same way a sort does,
+            // but neither was in this list before, so switching league or
+            // long-pressing a team to favorite it mid-scroll left the list
+            // sitting at a stale index into the reshuffled data instead of
+            // resetting to top.
+            LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter, selectedLeague, isAllLeaguesSelected, bumpFavoriteTeamGames, favoriteTeamNames) {
+                listState.animateScrollToTopAdaptively()
+            }
 
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),

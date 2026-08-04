@@ -368,7 +368,13 @@ private fun FavoriteGamesPage(
                 }
 
                 val listState = rememberLazyListState()
-                LaunchedEffect(sortOption, showAllLeagues) { listState.animateScrollToTopAdaptively() }
+                // Also keyed on selectedLeague, not just showAllLeagues -
+                // scopedGames (line 331-335) re-filters by selectedLeague
+                // whenever showAllLeagues is off, so switching leagues while
+                // still scoped to a single league reshuffles `ordered` the
+                // same way toggling showAllLeagues does, but wasn't
+                // triggering the scroll reset before this.
+                LaunchedEffect(sortOption, showAllLeagues, selectedLeague) { listState.animateScrollToTopAdaptively() }
 
                 LazyColumn(
                     modifier = Modifier.fillMaxSize(),

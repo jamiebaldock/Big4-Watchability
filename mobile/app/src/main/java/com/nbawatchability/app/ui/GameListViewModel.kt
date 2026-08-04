@@ -399,23 +399,51 @@ class GameListViewModel : ViewModel() {
                 // actually extends past what the narrow window above
                 // already covered - a short season (or no season data at
                 // all) means the narrow fetch already has everything.
+                //
+                // This phase is wrapped in its OWN try/catch, separate from
+                // phase 1 above - it's inherently more failure-prone (up to
+                // ~10 concurrent chunk requests for a full season, vs. phase
+                // 1's single narrow-window request) and phase 1 has ALREADY
+                // painted a correct, usable view by this point. Letting a
+                // phase-2 failure fall through to the outer catch below
+                // would replace that already-good Loaded state with a hard
+                // Error screen - confirmed live as the reported bug ("NHL
+                // loads on season opener, which is correct, then crashes to
+                // couldn't-load-games/internal error"): the narrow window
+                // rendered fine, then the full-season fetch hit a transient
+                // failure and stomped it. Swallowing it here instead just
+                // leaves the narrow window in place - a real but reduced
+                // view (no season chips beyond +/-7 days) beats replacing a
+                // working screen with an error.
                 val needsFullFetch = range != null && (range.first < narrowStart || range.second > narrowEnd)
                 val finalDays = if (needsFullFetch) {
-                    val fullStartMs = System.currentTimeMillis()
-                    val fullDays = fetchSchedule()
-                    com.nbawatchability.app.util.FileLogger.log(
-                        "PERF",
-                        "full season fetch took ${System.currentTimeMillis() - fullStartMs}ms, got ${fullDays.size} days"
-                    )
-                    if (token != loadToken) return@launch
-                    selectedDayIndex = landingIndex(fullDays, anchor, landsOnSeasonStart)
-                    uiState = ScheduleUiState.Loaded(fullDays)
-                    fullDays
+                    try {
+                        val fullStartMs = System.currentTimeMillis()
+                        val fullDays = fetchSchedule()
+                        com.nbawatchability.app.util.FileLogger.log(
+                            "PERF",
+                            "full season fetch took ${System.currentTimeMillis() - fullStartMs}ms, got ${fullDays.size} days"
+                        )
+                        if (token != loadToken) return@launch
+                        selectedDayIndex = landingIndex(fullDays, anchor, landsOnSeasonStart)
+                        uiState = ScheduleUiState.Loaded(fullDays)
+                        fullDays
+                    } catch (e: Exception) {
+                        com.nbawatchability.app.util.FileLogger.logError("PERF", "GameListViewModel.load full-season fetch failed, keeping narrow window", e)
+                        narrowDays
+                    }
                 } else {
                     narrowDays
                 }
 
-                scheduleCache[cacheKey] = CachedSchedule(System.currentTimeMillis(), finalDays, seasonRange)
+                // seasonRange only stored alongside the cache entry when the
+                // full fetch actually succeeded (or wasn't needed) - if it
+                // failed, finalDays is just the narrow window and doesn't
+                // actually cover seasonRange, so caching it under that range
+                // would mislead a later cache-hit load() into thinking the
+                // full season is already loaded.
+                val cachedSeasonRangeForThisLoad = if (finalDays === narrowDays && needsFullFetch) null else seasonRange
+                scheduleCache[cacheKey] = CachedSchedule(System.currentTimeMillis(), finalDays, cachedSeasonRangeForThisLoad)
                 com.nbawatchability.app.util.FileLogger.log("PERF", "GameListViewModel.load DONE in ${System.currentTimeMillis() - startMs}ms")
             } catch (e: Exception) {
                 if (token == loadToken) {
@@ -462,7 +490,7 @@ class GameListViewModel : ViewModel() {
                 if (nextDate == null) {
                     jumpError = "No upcoming games found yet"
                 } else {
-                    jumpToDateInternal(nextDate, loadedState) { jumpError = it }
+                    jumpToDateInternal(nextDate, loadedState, preferFirstGameOnOrAfter = true) { jumpError = it }
                 }
             } catch (e: Exception) {
                 jumpError = e.message ?: "Couldn't reach the backend"
@@ -533,12 +561,56 @@ class GameListViewModel : ViewModel() {
         }
     }
 
-    private suspend fun jumpToDateInternal(date: LocalDate, loadedState: ScheduleUiState.Loaded, onError: (String) -> Unit) {
+    private suspend fun jumpToDateInternal(
+        date: LocalDate,
+        loadedState: ScheduleUiState.Loaded,
+        preferFirstGameOnOrAfter: Boolean = false,
+        onError: (String) -> Unit
+    ) {
         try {
-            if (seasonRange == null) windowCenter = date
-            val days = fetchSchedule()
-            scheduleCache[cacheKeyFor(currentLeagueGroups)] = CachedSchedule(System.currentTimeMillis(), days, seasonRange)
-            selectedDayIndex = days.indexOfFirst { it.date == date }.coerceAtLeast(0)
+            // seasonRange, once fetched, is fixed for the rest of the
+            // session (see its declaration above) and reflects whichever
+            // season the backend currently considers "current" for this
+            // league - for a league that's off-season, that's the UPCOMING
+            // season, not the one just finished. A calendar jump to a date
+            // before that (last season, or the off-season gap) falls
+            // outside [seasonRange], so blindly re-fetching that same range
+            // would come back with the exact same days as before - never
+            // containing the requested date, and coercing selectedDayIndex
+            // to 0 (the season opener) instead of actually moving. Treated
+            // the same as the seasonRange == null case: fall back to a
+            // narrow window centered on the requested date instead of the
+            // stale season bounds. dateOutsideSeason is also carried into
+            // the cache write below so a later cache-hit load() doesn't
+            // mistake these narrow-window days for full-season coverage.
+            val currentSeasonRange = seasonRange
+            val dateOutsideSeason = currentSeasonRange != null &&
+                date !in currentSeasonRange.first..currentSeasonRange.second
+            if (currentSeasonRange == null || dateOutsideSeason) windowCenter = date
+            val days = if (dateOutsideSeason) fetchSchedule(forceNarrowAround = date) else fetchSchedule()
+            val cachedSeasonRange = if (dateOutsideSeason) null else seasonRange
+            scheduleCache[cacheKeyFor(currentLeagueGroups)] = CachedSchedule(System.currentTimeMillis(), days, cachedSeasonRange)
+            // jumpToNextGame's [date] is the backend's raw ESPN scoreboard-
+            // day boundary for the next game, not local-date-bucketed the
+            // way [days] is (rebucketByLocalDate re-buckets every game by
+            // the VIEWER's local tipoff date) - same cross-timezone gap
+            // documented on load()'s landsOnSeasonStart above (confirmed
+            // live there: NFL's raw boundary "2026-08-06" vs. the real local
+            // date "2026-08-07" for anyone at UTC-4 or later). Since [days]
+            // always has an entry for every date in the fetched window
+            // (empty or not), a plain equality match on the raw [date]
+            // "succeeds" by landing on that empty day - one day before the
+            // real next game - instead of actually failing over. Bounded to
+            // `it.date >= date` (not an unbounded "first day with games
+            // anywhere in the window") since the fetched window can span a
+            // few days BEFORE [date] too - an unbounded scan there could
+            // land on an unrelated earlier game instead of the real next one.
+            val firstGameOnOrAfterIndex = if (preferFirstGameOnOrAfter) {
+                days.indexOfFirst { it.date >= date && it.games.isNotEmpty() }
+            } else {
+                -1
+            }
+            selectedDayIndex = if (firstGameOnOrAfterIndex >= 0) firstGameOnOrAfterIndex else days.indexOfFirst { it.date == date }.coerceAtLeast(0)
             uiState = ScheduleUiState.Loaded(days)
         } catch (e: Exception) {
             onError(e.message ?: "Couldn't reach the backend")
@@ -586,8 +658,17 @@ class GameListViewModel : ViewModel() {
         }
     }
 
-    private suspend fun fetchSchedule(): List<DayGames> {
-        val (start, end) = seasonRange ?: (windowCenter.minusDays(DISPLAY_RANGE_DAYS) to windowCenter.plusDays(DISPLAY_RANGE_DAYS))
+    // [forceNarrowAround], when set, bypasses [seasonRange] entirely and
+    // fetches a narrow +/-[DISPLAY_RANGE_DAYS] window centered on that date
+    // instead - used by jumpToDateInternal when the requested date falls
+    // outside the loaded seasonRange (see the comment there), since in that
+    // case seasonRange's own bounds are exactly what must NOT be used.
+    private suspend fun fetchSchedule(forceNarrowAround: LocalDate? = null): List<DayGames> {
+        val (start, end) = if (forceNarrowAround != null) {
+            forceNarrowAround.minusDays(DISPLAY_RANGE_DAYS) to forceNarrowAround.plusDays(DISPLAY_RANGE_DAYS)
+        } else {
+            seasonRange ?: (windowCenter.minusDays(DISPLAY_RANGE_DAYS) to windowCenter.plusDays(DISPLAY_RANGE_DAYS))
+        }
         val fetched = fetchScheduleChunked(
             start.minusDays(QUERY_BUFFER_DAYS),
             end.plusDays(QUERY_BUFFER_DAYS),

@@ -569,8 +569,15 @@ private fun DayGamesList(
     // needs the same reset-to-top treatment a re-sort gets; previously only
     // sortOption was keyed here, so filtering while scrolled down left the
     // list sitting at whatever index it was, no longer necessarily near the
-    // top of the newly-shorter filtered list.
-    LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter) { listState.animateScrollToTopAdaptively() }
+    // top of the newly-shorter filtered list. Also keyed on
+    // bumpFavoriteTeamGames/favoriteTeamNames (the bump reorder, line 560
+    // above) - favoriting a team is a long-press directly on one of these
+    // same tiles, so with the bump setting on, that gesture reshuffles this
+    // very list out from under the viewer without a reset unless it's keyed
+    // here too.
+    LaunchedEffect(sortOption, minTierFilterEnabled, minTierFilter, bumpFavoriteTeamGames, favoriteTeamNames) {
+        listState.animateScrollToTopAdaptively()
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),

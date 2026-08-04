@@ -42,14 +42,24 @@ class FavoriteGamesViewModel : ViewModel() {
     var uiState by mutableStateOf<FavoriteGamesUiState>(FavoriteGamesUiState.Loading)
         private set
 
+    // AppRoot fires load() from two separate LaunchedEffects (initial
+    // composition, and again on every favoriteTeams change) - without a
+    // generation guard, an older call's slower multi-team fetch landing
+    // after a newer call's faster one would silently overwrite the correct,
+    // up-to-date result with a stale one. Same shape/reasoning as
+    // GameListViewModel's loadToken.
+    private var loadToken = 0
+
     fun load(favoriteTeams: List<Team>) {
+        val token = ++loadToken
         uiState = FavoriteGamesUiState.Loading
         viewModelScope.launch {
-            uiState = try {
+            val result = try {
                 FavoriteGamesUiState.Loaded(fetchAll(favoriteTeams))
             } catch (e: Exception) {
                 FavoriteGamesUiState.Error(e.message ?: "Couldn't reach the backend")
             }
+            if (token == loadToken) uiState = result
         }
     }
 

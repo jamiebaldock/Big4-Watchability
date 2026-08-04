@@ -55,8 +55,11 @@ class LeagueRostersViewModel : ViewModel() {
             // regardless of which league is actually selected now, which is
             // exactly how a WNBA search ended up showing NBA team names
             // (James's report, 2026-07-24: Angela Dugalic/Nell Angloma
-            // shown with Timberwolves/Knicks).
-            if (currentLeagueGroup == leagueGroup) {
+            // shown with Timberwolves/Knicks). Also checks the teams list
+            // itself, not just the league - a same-league reload with a
+            // different team list (e.g. a retried TeamsViewModel fetch)
+            // deserves the same guard, not just a cross-league switch.
+            if (currentLeagueGroup == leagueGroup && currentTeams == teams) {
                 uiState = result
             }
         }

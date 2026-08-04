@@ -28,10 +28,18 @@ class StatsViewModel : ViewModel() {
         currentLeagueGroup = leagueGroup
         uiState = StatsUiState.Loading
         viewModelScope.launch {
-            uiState = try {
+            val result = try {
                 StatsUiState.Loaded(NetworkLeagueContentRepository.stats(BACKEND_BASE_URL, leagueGroup))
             } catch (e: Exception) {
                 StatsUiState.Error(e.message ?: "Couldn't reach the backend")
+            }
+            // Same stale-response guard as RosterViewModel/LeagueRostersViewModel -
+            // discard a result for a league the caller has since switched away
+            // from, so a slow-to-resolve earlier league can't overwrite a
+            // faster-resolving later one (the same shape as James's 2026-07-24
+            // "WNBA search showing NBA data" report).
+            if (currentLeagueGroup == leagueGroup) {
+                uiState = result
             }
         }
     }

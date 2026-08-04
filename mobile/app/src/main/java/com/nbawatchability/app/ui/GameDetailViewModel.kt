@@ -28,10 +28,17 @@ class GameDetailViewModel : ViewModel() {
         currentEventId = eventId
         uiState = GameDetailUiState.Loading
         viewModelScope.launch {
-            uiState = try {
+            val result = try {
                 GameDetailUiState.Loaded(NetworkLeagueContentRepository.gameDetail(BACKEND_BASE_URL, eventId))
             } catch (e: Exception) {
                 GameDetailUiState.Error(e.message ?: "Couldn't reach the backend")
+            }
+            // Same stale-response guard as RosterViewModel - discard a result
+            // for a game the caller has since navigated away from, so a
+            // slow-to-resolve earlier popup can't overwrite a
+            // faster-resolving later one.
+            if (currentEventId == eventId) {
+                uiState = result
             }
         }
     }
