@@ -643,11 +643,26 @@ class GameListViewModel : ViewModel() {
         if (isRefreshing) return
         val loadedState = uiState as? ScheduleUiState.Loaded ?: return
         val targetDate = loadedState.days.getOrNull(selectedDayIndex)?.date ?: return
+        // Same staleness guard load() uses (see loadToken's own comment) -
+        // without this, a refresh() started for the OLD league (fired by
+        // GamesTab's LifecycleEventEffect(ON_RESUME), which Android's
+        // Lifecycle replays synthetically for every newly-composed observer
+        // on an already-resumed Activity - i.e. on every fresh entry into
+        // the Schedule tab, not just a real app-background/foreground) can
+        // have its single-day fetch resolve AFTER a subsequent load() for a
+        // NEWER league has already landed correct data, and this function's
+        // unconditional uiState write below would silently stomp it back to
+        // the stale league's Loaded state - the real root cause of the
+        // Favorites->Schedule flash bug (initially misdiagnosed as a
+        // rendering-performance issue across two investigation sessions,
+        // before being traced here via direct GamesTab state logging).
+        val token = loadToken
 
         isRefreshing = true
         viewModelScope.launch {
             try {
                 val refreshedGames = fetchGamesForLocalDate(targetDate)
+                if (token != loadToken) return@launch
                 val updatedDays = loadedState.days.map { day ->
                     if (day.date == targetDate) day.copy(games = refreshedGames) else day
                 }
