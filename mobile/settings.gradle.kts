@@ -15,3 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Big4 Watchability"
 include(":app")
+include(":baselineprofile")

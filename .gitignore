@@ -18,6 +18,7 @@ mobile/.gradle/
 mobile/.kotlin/
 mobile/build/
 mobile/app/build/
+mobile/baselineprofile/build/
 mobile/local.properties
 mobile/.idea/
 mobile/*.iml

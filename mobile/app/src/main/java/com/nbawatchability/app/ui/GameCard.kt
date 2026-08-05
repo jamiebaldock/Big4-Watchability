@@ -13,7 +13,6 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -191,7 +190,7 @@ fun GameCard(
         shape = RoundedCornerShape(14.dp),
         border = tier?.let { BorderStroke(1.5.dp, it.color()) }
     ) {
-        Row(modifier = Modifier.fillMaxWidth().height(IntrinsicSize.Min)) {
+        Row(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.weight(1f).padding(16.dp)) {
                 // Summer League keeps its own static label; every other game's
                 // label (preseason/regular season/playoffs/NBA Cup) comes
@@ -588,6 +587,7 @@ private fun playerHaterLine(name: String, line: String): String {
  * LocalHatedPlayerNames list - being a standout here isn't enough on its
  * own, someone has to have actually marked them as hated first.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun StandoutPerformerCallout(
     performers: List<StandoutPerformer>,

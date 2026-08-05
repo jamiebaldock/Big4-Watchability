@@ -6,6 +6,7 @@ plugins {
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
     id("com.google.gms.google-services")
+    id("androidx.baselineprofile")
 }
 
 // Upload-key credentials for the Play Store release build - never committed
@@ -108,4 +109,13 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    // Favorites->Schedule league-flash stall (see memory
+    // project_favorites_schedule_flash_investigation_2) traced to ART
+    // interpreting cold, never-JIT-compiled bytecode the first time each
+    // league's own code paths run - profileinstaller delivers the
+    // :baselineprofile module's generated profile to ART at install time so
+    // those paths are pre-compiled instead of cold-interpreted.
+    implementation("androidx.profileinstaller:profileinstaller:1.4.1")
+    baselineProfile(project(":baselineprofile"))
 }
