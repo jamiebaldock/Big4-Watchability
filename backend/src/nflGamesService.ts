@@ -222,6 +222,15 @@ export async function getNflGamesForDate(date: string): Promise<GameJson[]> {
 
   const results: GameJson[] = [];
   for (const event of events) {
+    if (!event?.competitions?.length) {
+      // ESPN's own scoreboard has been observed returning a literal `{}`
+      // placeholder entry in events[] (confirmed live, 2026-08-06, NFL Hall
+      // of Fame Game date) with none of the fields processNflEvent needs -
+      // skipping it here is the difference between one malformed slot and
+      // a 500 that takes down the whole date's real games with it.
+      console.warn(`getNflGamesForDate: skipping malformed ESPN event for ${date}`, event);
+      continue;
+    }
     results.push(await processNflEvent(event));
   }
   return results;
@@ -239,6 +248,13 @@ export async function getNflTeamSchedule(teamId: string): Promise<GameJson[]> {
   const events = await fetchNflTeamSchedule(teamId);
   const results: GameJson[] = [];
   for (const event of events) {
+    if (!event?.competitions?.length) {
+      // Same malformed-event guard as getNflGamesForDate above - this
+      // endpoint isn't confirmed to hit the same ESPN quirk, but the shape
+      // contract is identical, so the same defensive check costs nothing.
+      console.warn(`getNflTeamSchedule: skipping malformed ESPN event for team ${teamId}`, event);
+      continue;
+    }
     results.push(await processNflEvent(event));
   }
   return results;
