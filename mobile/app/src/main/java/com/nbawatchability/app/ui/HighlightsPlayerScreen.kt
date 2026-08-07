@@ -1,11 +1,14 @@
 package com.nbawatchability.app.ui
 
 import android.app.Activity
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.WebView
 import androidx.compose.foundation.background
@@ -109,6 +112,19 @@ private fun LockLandscapeFullscreen() {
     }
 }
 
+// youtube.com/watch links are registered by the YouTube app itself, so a
+// plain ACTION_VIEW opens there directly when it's installed, falling back
+// to a browser otherwise - no vnd.youtube: scheme trickery needed. Wrapped
+// in a try/catch purely for the no-app-can-handle-this edge case (e.g. a
+// stripped-down device build with neither YouTube nor a browser present),
+// which would otherwise crash with ActivityNotFoundException.
+private fun openInYoutubeApp(context: Context, videoId: String): Boolean = try {
+    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
+    true
+} catch (e: ActivityNotFoundException) {
+    false
+}
+
 private fun isOnWifi(context: Context): Boolean {
     val connectivityManager = context.getSystemService<ConnectivityManager>() ?: return false
     val network = connectivityManager.activeNetwork ?: return false
@@ -151,7 +167,7 @@ fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit, wifiOnlyEnabled:
         if (needsWifiPrompt) {
             WifiOnlyPrompt(onWatchAnyway = { proceedOnCellular = true }, onCancel = onBack)
         } else {
-            YoutubePlayer(videoId = videoId)
+            YoutubePlayer(videoId = videoId, onBack = onBack)
         }
 
         // A small floating affordance rather than a title bar - the system
@@ -244,12 +260,31 @@ private const val CONTAINER_SIZE_FIX_JS = """
 """
 
 @Composable
-private fun YoutubePlayer(videoId: String) {
+private fun YoutubePlayer(videoId: String, onBack: () -> Unit) {
+    val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     var errorMessage by remember(videoId) { mutableStateOf<String?>(null) }
     var playerReady by remember(videoId) { mutableStateOf(false) }
     var playerView by remember(videoId) { mutableStateOf<YouTubePlayerView?>(null) }
     var lifecycleObserver by remember(videoId) { mutableStateOf<LifecycleEventObserver?>(null) }
+    var pendingExternalOpen by remember(videoId) { mutableStateOf(false) }
+
+    // Confirmed via emulator repro: calling onBack() directly inside onError
+    // below (i.e. synchronously within the WebView bridge's own callback
+    // stack, at the exact moment openInYoutubeApp's startActivity also makes
+    // this window lose focus) piles WebView teardown + orientation/system-bar
+    // restore + the Games tab's own resumed data reload onto the main thread
+    // right when Android's input dispatcher needs this window to acknowledge
+    // the focus-loss event - on a loaded device that can blow past the 5s ANR
+    // budget before any of it finishes, and Android background-kills the app
+    // as a "bg anr" while the user's already looking at YouTube. Routing
+    // through a LaunchedEffect instead defers onBack() to its own coroutine
+    // dispatch (a later message-queue turn), so the focus-loss event gets a
+    // chance to be dispatched and acknowledged before our own teardown work
+    // starts competing for the main thread.
+    LaunchedEffect(pendingExternalOpen) {
+        if (pendingExternalOpen) onBack()
+    }
 
     // Playback depends on the WebView loading https://www.youtube.com/iframe_api
     // over the network - if that request is silently dropped (DNS filtering,
@@ -337,7 +372,22 @@ private fun YoutubePlayer(videoId: String) {
                                 }
 
                                 override fun onError(youTubePlayer: YouTubePlayer, error: PlayerConstants.PlayerError) {
-                                    errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
+                                    // The video owner has disabled embedded playback
+                                    // (a real, per-video YouTube restriction -
+                                    // backend/src/youtubeClient.ts's match step now
+                                    // filters this out for new matches, but it can
+                                    // still surface for anything matched before that
+                                    // filter existed). Nothing this screen can do
+                                    // about it, so bounce straight to the YouTube
+                                    // app/browser instead of dead-ending on an error
+                                    // message the user can't act on.
+                                    if (error == PlayerConstants.PlayerError.VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER &&
+                                        openInYoutubeApp(context, videoId)
+                                    ) {
+                                        pendingExternalOpen = true
+                                    } else {
+                                        errorMessage = "Couldn't play this video (${error.name.lowercase().replace('_', ' ')})."
+                                    }
                                 }
 
                                 override fun onStateChange(youTubePlayer: YouTubePlayer, state: PlayerConstants.PlayerState) {}
