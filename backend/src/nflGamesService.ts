@@ -11,15 +11,11 @@
 // facts from day one (see feedback_new_league_full_pipeline_checklist.md -
 // this was a gap MLB had to retrofit, not repeated here).
 //
-// Highlights search (checkPendingNflHighlights below) is built and follows
-// the exact same pattern MLB's own did at this stage, but is deliberately
-// NOT called from anywhere yet - not highlightsPoller.ts, not
-// processNflEvent below - matching MLB's own staged rollout (built and
-// verified against real ESPN data, YouTube title format not yet confirmed
-// since the NFL is in its offseason - see youtubeClient.ts's own comment).
-// Wiring it in later is a one-line change: import checkPendingNflHighlights
-// into highlightsPoller.ts's pollOnce() alongside the existing
-// checkPendingHighlights()/checkPendingMlbHighlights() calls.
+// Highlights search (checkPendingNflHighlights below) follows the exact
+// same pattern MLB's own did. Title format was confirmed 2026-08-07 against
+// real preseason uploads once the NFL season actually started (see
+// youtubeClient.ts's NFL_YOUTUBE_CHANNEL_ID comment) and wired into
+// highlightsPoller.ts's pollOnce() alongside the other leagues.
 import { toEspnDate } from "./espnClient";
 import {
   GameRow,
@@ -282,8 +278,7 @@ export async function getNextNflScheduledDate(afterDate: string): Promise<string
 /**
  * Searches for and records one NFL game's highlights match - the NFL
  * analogue of mlbGamesService.ts's checkMlbGameHighlights, sharing every
- * piece of that function's design. Not called from anywhere yet - see this
- * file's header comment.
+ * piece of that function's design.
  */
 async function checkNflGameHighlights(row: GameRow): Promise<void> {
   if (!canSpendSearchQuota()) {
@@ -309,10 +304,8 @@ const MAX_NFL_CHECKS_PER_POLL = 20;
 /**
  * NFL analogue of mlbGamesService.ts's checkPendingMlbHighlights - reuses
  * the exact same isDueForHighlightsCheck so the fixed 15-min-then-30-min
- * two-check schedule is identical across every league. Not called from
- * highlightsPoller.ts or anywhere else yet - built, ready to wire in once
- * the title-format caveat in youtubeClient.ts's own comment is resolved
- * against a real live NFL upload.
+ * two-check schedule is identical across every league. Called from
+ * highlightsPoller.ts's pollOnce().
  */
 export async function checkPendingNflHighlights(): Promise<void> {
   if (!isYoutubeSearchConfigured()) return;

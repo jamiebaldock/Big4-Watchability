@@ -15,6 +15,7 @@
 // due time, not frequent enough to drive the schedule itself.
 import { checkPendingHighlights } from "./gamesService";
 import { checkPendingMlbHighlights } from "./mlbGamesService";
+import { checkPendingNflHighlights } from "./nflGamesService";
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -28,6 +29,11 @@ async function pollOnce(): Promise<void> {
     await checkPendingMlbHighlights();
   } catch (err) {
     console.error("highlightsPoller: checkPendingMlbHighlights failed", err);
+  }
+  try {
+    await checkPendingNflHighlights();
+  } catch (err) {
+    console.error("highlightsPoller: checkPendingNflHighlights failed", err);
   }
 }
 

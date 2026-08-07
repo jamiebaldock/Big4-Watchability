@@ -14,15 +14,19 @@ const WNBA_YOUTUBE_CHANNEL_ID = "UCO9a_ryN_l7DIDS-VIt-zmw";
 // branch - only the channel id differs.
 const MLB_YOUTUBE_CHANNEL_ID = "UCoLrcjPV5PbUrUyXq5mjc_A";
 // Channel id confirmed the same way as every other league above (canonical
-// externalId on youtube.com/@NFL) - but unlike NBA/WNBA/MLB, the actual
-// "FULL GAME HIGHLIGHTS"-style title format was NOT directly confirmed
-// against a real recent upload (the NFL is in its offseason as of this
-// build - no fresh games/videos exist to check against, and the channel's
-// video-listing page doesn't expose titles without full JS rendering).
-// Verify the title format against a real live upload before ever wiring
-// checkPendingNflHighlights into highlightsPoller.ts, the same "verify
-// before assuming" rule this file's own match predicate exists to enforce
-// for every other league.
+// externalId on youtube.com/@NFL). Title format confirmed 2026-08-07 against
+// two real live uploads: the 2026 Hall of Fame Game ("Carolina Panthers vs.
+// Arizona Cardinals | 2026 Hall of Fame Game Highlights") and a real 2025
+// regular-season game from the @NFL channel's history ("Kansas City Chiefs
+// vs Buffalo Bills Game Highlights | 2025 NFL Season Week 9"). Like
+// NHL, NFL's real titles never contain "FULL GAME HIGHLIGHTS" - they use
+// full "City Nickname" display names (not nickname-only) and the phrase
+// "Game Highlights" (no "Full"). Note the channel also posts separate
+// "FULL GAME" replay uploads with no "Highlights" in the title (e.g.
+// "Kansas City Chiefs vs. Buffalo Bills FULL GAME | NFL 2025 Season Week
+// 9") - those must NOT match, which is why "GAME HIGHLIGHTS" (not bare
+// "HIGHLIGHTS") is required below, same reasoning as every other league's
+// stricter-substring choice.
 const NFL_YOUTUBE_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
 // Channel id confirmed the same way as every other league above (canonical
 // externalId + <link rel="canonical"> + channelMetadataRenderer.title="NHL"
@@ -54,14 +58,18 @@ function channelIdFor(league: HighlightsLeague): string {
 
 // NHL's real titles never contain the literal "FULL GAME HIGHLIGHTS" phrase
 // (see NHL_YOUTUBE_CHANNEL_ID's own comment) - just "HIGHLIGHTS" alongside
-// either "NHL Highlights" or "NHL Playoff Highlights". Every other league's
-// confirmed real titles do contain the full "FULL GAME HIGHLIGHTS" phrase,
-// so requiring only the broader "HIGHLIGHTS" substring for them too would
-// risk matching an unrelated video (a "Top Plays" or "Best Highlights"
-// clip-show upload) that happens to share the team-name substrings - keeping
-// the stricter phrase for those leagues is deliberate, not an oversight.
+// either "NHL Highlights" or "NHL Playoff Highlights". NFL's real titles
+// (see NFL_YOUTUBE_CHANNEL_ID's own comment) also drop "FULL" but do
+// reliably contain "GAME HIGHLIGHTS", which the channel's separate
+// no-highlights "FULL GAME" replay uploads never do - using that instead of
+// bare "HIGHLIGHTS" keeps the same "Top Plays"/clip-show false-positive
+// protection every other league gets from its own stricter phrase.
+// NBA/WNBA/MLB's confirmed real titles do contain the full "FULL GAME
+// HIGHLIGHTS" phrase, so they keep requiring it.
 function requiredTitlePhraseFor(league: HighlightsLeague): string {
-  return league === "nhl" ? "HIGHLIGHTS" : "FULL GAME HIGHLIGHTS";
+  if (league === "nhl") return "HIGHLIGHTS";
+  if (league === "nfl") return "GAME HIGHLIGHTS";
+  return "FULL GAME HIGHLIGHTS";
 }
 
 // search.list has its own dedicated daily quota bucket (separate from the
@@ -247,13 +255,23 @@ export async function searchHighlightsVideo(
   // where the channel posts far more same-day videos than a regular-season
   // day. Querying with what the title actually contains ranks it correctly.
   // NHL's own confirmed real titles say "NHL Highlights"/"NHL Playoff
-  // Highlights", never "full game highlights" - querying with that literal
-  // phrase for NHL would still likely surface the same video (YouTube's
-  // search ranking isn't an exact-substring match), but querying with what
-  // the title actually says is the same "don't guess, match what's real"
-  // principle every other league's query construction already follows here.
-  const query =
-    league === "nhl" ? `${awayNickname} ${homeNickname} NHL highlights` : `${awayNickname} ${homeNickname} full game highlights`;
+  // Highlights", and NFL's say "Game Highlights" - neither ever says "full
+  // game highlights". Querying with that literal phrase for either would
+  // still likely surface the same video (YouTube's search ranking isn't an
+  // exact-substring match), but querying with what the title actually says
+  // is the same "don't guess, match what's real" principle every other
+  // league's query construction already follows here - and for NFL
+  // specifically, the channel's separate "FULL GAME" (no highlights) replay
+  // upload also contains "full", so leaving it in the query risked diluting
+  // relevance ranking toward the wrong video.
+  let query: string;
+  if (league === "nhl") {
+    query = `${awayNickname} ${homeNickname} NHL highlights`;
+  } else if (league === "nfl") {
+    query = `${awayNickname} ${homeNickname} game highlights`;
+  } else {
+    query = `${awayNickname} ${homeNickname} full game highlights`;
+  }
 
   const params = new URLSearchParams({
     key: apiKey,
