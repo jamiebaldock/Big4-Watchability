@@ -29,6 +29,7 @@ import {
   getSearchBudgetHistory,
   getSearchOutcomeCounts,
   getTodaySearchBudgetCount,
+  clearHighlights,
   recordHighlightsSearchLog,
   recordSearchQuotaSpend,
   setHighlights,
@@ -154,7 +155,7 @@ export function getAdminMissingHighlights(): AdminMissingHighlightsGame[] {
     .map(toAdminRow);
 }
 
-const SUPPORTED_RESEND_LEAGUES: ReadonlySet<string> = new Set(["nba", "wnba", "mlb"]);
+const SUPPORTED_RESEND_LEAGUES: ReadonlySet<string> = new Set(["nba", "wnba", "mlb", "nfl", "nhl"]);
 
 export interface AdminResendResult {
   matched: boolean;
@@ -170,6 +171,12 @@ export interface AdminResendResult {
  * a real search.list unit against the same shared daily budget every other
  * caller uses - there's only one real quota, Google's, and this can't
  * bypass that even if it bypasses this app's own internal scheduling.
+ *
+ * Clears any existing yt_video_id first (gameStore.ts's clearHighlights) -
+ * setHighlights' own WHERE yt_video_id IS NULL guard means a plain re-search
+ * would otherwise silently fail to overwrite an already-set match, which
+ * defeats the actual point of a "re-search" button whenever the existing
+ * match is the confirmed-bad one (e.g. a since-found-non-embeddable video).
  */
 export async function resendHighlightsSearch(eventId: string): Promise<AdminResendResult> {
   const row = getGame(eventId);
@@ -183,6 +190,7 @@ export async function resendHighlightsSearch(eventId: string): Promise<AdminRese
 
   const league = row.leagueGroup as HighlightsLeague;
   recordSearchQuotaSpend();
+  if (row.ytVideoId) clearHighlights(row.eventId);
 
   let match;
   try {

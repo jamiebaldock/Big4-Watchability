@@ -345,6 +345,14 @@ const statements = {
     `UPDATE games SET yt_video_id=?, yt_found_at=?, yt_published_at=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`
   ),
   setHighlightsFromSeed: db.prepare(`UPDATE games SET yt_video_id=?, updated_at=? WHERE event_id=? AND yt_video_id IS NULL`),
+  // Deliberately unguarded (unlike setHighlights' own WHERE yt_video_id IS
+  // NULL) - this exists specifically to remove an already-set value, e.g.
+  // a match confirmed non-embeddable after the fact, so a subsequent
+  // setHighlights call (which requires the column to be NULL first) can
+  // actually write a replacement instead of silently no-op'ing.
+  clearHighlights: db.prepare(
+    `UPDATE games SET yt_video_id=NULL, yt_found_at=NULL, yt_published_at=NULL, yt_check_count=0, yt_last_checked_at=NULL, updated_at=? WHERE event_id=?`
+  ),
   setPreview: db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`),
 };
 
@@ -777,6 +785,19 @@ export function setNhlFinalRubric(eventId: string, result: NhlFinalResult, final
 export function setHighlights(eventId: string, videoId: string, publishedAt: string | null): void {
   const ts = now();
   statements.setHighlights.run(videoId, ts, publishedAt, ts, eventId);
+}
+
+/**
+ * Resets a game back to "no highlights match yet" - also clears
+ * yt_check_count/yt_last_checked_at so isDueForHighlightsCheck treats it as
+ * fresh rather than "already used its 2 checks." Used by the Admin page's
+ * manual re-search (adminService.ts's resendHighlightsSearch) so a
+ * confirmed-bad existing match (e.g. one later found to be non-embeddable)
+ * can actually be overwritten - setHighlights' own WHERE yt_video_id IS NULL
+ * guard means it silently no-ops otherwise.
+ */
+export function clearHighlights(eventId: string): void {
+  statements.clearHighlights.run(now(), eventId);
 }
 
 /** Manually-confirmed video (highlightsSeed.ts) - sets yt_video_id only, deliberately not yt_found_at (see setHighlights). */

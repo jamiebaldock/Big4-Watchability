@@ -110,6 +110,20 @@ interface YoutubeSearchResponse {
 interface YoutubeVideoItem {
   id?: string;
   contentDetails?: { duration?: string };
+  status?: { embeddable?: boolean };
+}
+
+interface VideoMeta {
+  seconds: number;
+  // Confirmed live 2026-08-07: the NFL Hall of Fame Game's official
+  // highlights upload (DM2cJZlleFE) plays fine via oEmbed and on
+  // youtube.com, but the app's actual IFrame embed fails with YouTube's own
+  // "video not playable in embedded player" error - a real per-video
+  // owner-set restriction that oEmbed doesn't surface, only videos.list's
+  // status.embeddable field does. Missing this field entirely is treated as
+  // embeddable (every other league's matches observed so far either omit it
+  // or set it true) - only an explicit `false` disqualifies a candidate.
+  embeddable: boolean;
 }
 
 interface YoutubeVideosResponse {
@@ -190,31 +204,37 @@ function parseIsoDurationSeconds(duration: string): number | null {
   return hours * 3600 + minutes * 60 + seconds;
 }
 
-/** Fetches durations for a batch of video IDs in a single call (comma-joined, 1 quota unit total regardless of count). */
-async function fetchDurationsSeconds(apiKey: string, videoIds: string[]): Promise<Map<string, number>> {
-  const durations = new Map<string, number>();
-  if (videoIds.length === 0) return durations;
+/**
+ * Fetches duration + embeddable status for a batch of video IDs in a single
+ * call (comma-joined). videos.list's quota cost is fixed per call, not per
+ * requested part, so reading "status" alongside "contentDetails" here costs
+ * nothing extra over a duration-only call.
+ */
+async function fetchVideoMeta(apiKey: string, videoIds: string[]): Promise<Map<string, VideoMeta>> {
+  const meta = new Map<string, VideoMeta>();
+  if (videoIds.length === 0) return meta;
 
   const params = new URLSearchParams({
     key: apiKey,
-    part: "contentDetails",
+    part: "contentDetails,status",
     id: videoIds.join(","),
   });
 
   try {
     const res = await fetch(`${YOUTUBE_VIDEOS_URL}?${params.toString()}`);
-    if (!res.ok) return durations;
+    if (!res.ok) return meta;
     const data = (await res.json()) as YoutubeVideosResponse;
     for (const item of data.items ?? []) {
       const duration = item.contentDetails?.duration;
       const seconds = duration ? parseIsoDurationSeconds(duration) : null;
-      if (item.id && seconds !== null) durations.set(item.id, seconds);
+      const embeddable = item.status?.embeddable !== false;
+      if (item.id && seconds !== null) meta.set(item.id, { seconds, embeddable });
     }
   } catch (err) {
-    console.error("YouTube videos.list (duration check) failed", err);
+    console.error("YouTube videos.list (duration/embeddable check) failed", err);
   }
 
-  return durations;
+  return meta;
 }
 
 /**
@@ -332,14 +352,14 @@ export async function searchHighlightsVideo(
 
   if (textMatches.length === 0) return null;
 
-  const durations = await fetchDurationsSeconds(
+  const videoMeta = await fetchVideoMeta(
     apiKey,
     textMatches.map((m) => m.videoId)
   );
 
   for (const candidate of textMatches) {
-    const seconds = durations.get(candidate.videoId);
-    if (seconds !== undefined && seconds <= MAX_HIGHLIGHTS_SECONDS) return candidate;
+    const meta = videoMeta.get(candidate.videoId);
+    if (meta && meta.embeddable && meta.seconds <= MAX_HIGHLIGHTS_SECONDS) return candidate;
   }
 
   return null;
