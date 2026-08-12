@@ -118,7 +118,7 @@ object StartingSoonScheduler {
                 if (game.status != GameStatus.UPCOMING) continue
                 val tipoff = tipoffInstant(game.tipoffUtc) ?: continue
                 if (tipoff.isAfter(now) && tipoff.isBefore(horizon)) {
-                    targets[eventId] = BelledGameSnapshot(eventId, game.away, game.home, game.tipoffUtc)
+                    targets[eventId] = BelledGameSnapshot(eventId, game.away, game.home, game.tipoffUtc, game.league)
                 }
             }
         }
@@ -174,6 +174,8 @@ object StartingSoonScheduler {
                 putExtra(StartingSoonAlarmReceiver.EXTRA_AWAY, game.away)
                 putExtra(StartingSoonAlarmReceiver.EXTRA_HOME, game.home)
                 putExtra(StartingSoonAlarmReceiver.EXTRA_LEAD_MINUTES, leadMinutes)
+                putExtra(StartingSoonAlarmReceiver.EXTRA_LEAGUE, game.league)
+                putExtra(StartingSoonAlarmReceiver.EXTRA_TIPOFF_UTC, game.tipoffUtc)
             }
         }
         return PendingIntent.getBroadcast(
