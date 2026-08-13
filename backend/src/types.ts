@@ -1,5 +1,5 @@
 // Mirrors the mobile client's Game data class (mobile/app/.../data/Game.kt) and
-// the JSON contract in nba-watchability-spec.md section 5. Keep field names in sync.
+// the JSON contract in docs/nba-watchability-spec.md section 5. Keep field names in sync.
 
 export type GameStatus = "final" | "live" | "upcoming";
 

@@ -139,7 +139,7 @@ enum class Tier(val label: String, val emoji: String) {
     }
 }
 
-/** Mirrors the backend JSON contract in nba-watchability-spec.md section 5. */
+/** Mirrors the backend JSON contract in docs/nba-watchability-spec.md section 5. */
 @Serializable
 data class Game(
     // ESPN's own event id - distinct from this class's own computed [id]

@@ -3,7 +3,7 @@ package com.nbawatchability.app.ui.theme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// nba-app-design-prompt.md palette — exact hex values from the design prompt
+// docs/nba-app-design-prompt.md palette — exact hex values from the design prompt
 val DarkBackgroundBase = Color(0xFF101418)
 val DarkSurfaceCard = Color(0xFF1A2027)
 val DarkSurfaceCardElevated = Color(0xFF222A33)

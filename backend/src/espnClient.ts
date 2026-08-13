@@ -1,6 +1,6 @@
 // Thin client for ESPN's public (keyless) NBA endpoints. Unofficial but widely
 // used for exactly this kind of hobby project; named as an example source in
-// nba-watchability-spec.md section 2 point 12.
+// docs/nba-watchability-spec.md section 2 point 12.
 //
 // Regular season/playoffs and each NBA Summer League tournament are separate
 // "sports" as far as ESPN's site API is concerned, each with their own

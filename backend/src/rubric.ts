@@ -1,4 +1,4 @@
-// Port of nba-watchability-spec.md section 2, points 1-3. This is the single
+// Port of docs/nba-watchability-spec.md section 2, points 1-3. This is the single
 // source of truth for scoring; the mobile client's Tier.fromScore mirrors only
 // the score->tier mapping (not the full rubric, since clients don't have raw
 // play-by-play) so keep that in sync if the tier thresholds below change.

@@ -33,7 +33,7 @@ class BackendRequestException(message: String) : Exception(message)
 private val json = Json { ignoreUnknownKeys = true }
 
 /**
- * Talks to the real backend (nba-watchability-spec.md section 4/5). Point
+ * Talks to the real backend (docs/nba-watchability-spec.md section 4/5). Point
  * [baseUrl] at wherever the backend dev server (or, later, the deployed
  * cloud function) is reachable.
  */

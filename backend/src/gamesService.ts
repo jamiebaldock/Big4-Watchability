@@ -414,7 +414,7 @@ async function processEvent(league: League, leagueGroup: BasketballLeagueGroup, 
 
 /**
  * Fetches, scores, and caches one day's games, matching the mobile client's
- * JSON contract (nba-watchability-spec.md section 5).
+ * JSON contract (docs/nba-watchability-spec.md section 5).
  *
  * Bandwidth note: the one expensive ESPN call is fetchSummary (full
  * play-by-play + box score) - it's only ever made once per game, the first
