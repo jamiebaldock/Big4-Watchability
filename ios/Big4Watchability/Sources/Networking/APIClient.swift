@@ -63,6 +63,23 @@ struct APIClient {
     func scheduleCounts(year: Int, month: Int, leagueGroup: LeagueGroup) async throws -> [String: Int] {
         try await get("/schedule-counts?year=\(year)&month=\(month)&leagueGroup=\(leagueGroup.apiValue)")
     }
+
+    // Mirrors NetworkLeagueContentRepository.kt below this point.
+
+    /// GET /standings?leagueGroup=
+    func standings(leagueGroup: LeagueGroup) async throws -> StandingsResponse {
+        try await get("/standings?leagueGroup=\(leagueGroup.apiValue)")
+    }
+
+    /// GET /stats?leagueGroup=
+    func stats(leagueGroup: LeagueGroup) async throws -> StatsResponse {
+        try await get("/stats?leagueGroup=\(leagueGroup.apiValue)")
+    }
+
+    /// GET /news?leagueGroup=
+    func news(leagueGroup: LeagueGroup) async throws -> NewsResponse {
+        try await get("/news?leagueGroup=\(leagueGroup.apiValue)")
+    }
 }
 
 struct SeasonWindowResponse: Codable {

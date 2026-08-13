@@ -1,14 +1,18 @@
 import SwiftUI
 
-// First vertical slice: just the Games tab. Standings/Stats/News/Favorites/
-// History/Alerts tabs get added once this compiles and the CI loop is
-// proven out - see mobile/app/.../ui/ for the Android tab set to mirror.
+// Second vertical slice adds Standings. Stats/News/Favorites/History/Alerts
+// tabs still to come - see mobile/app/.../ui/ for the Android tab set to
+// mirror (BottomNavTab: Games/Starred/Favorites/History/Leaders/News/Settings).
 struct RootView: View {
     var body: some View {
         TabView {
             GamesView()
                 .tabItem {
                     Label("Games", systemImage: "sportscourt")
+                }
+            StandingsView()
+                .tabItem {
+                    Label("Standings", systemImage: "list.number")
                 }
         }
     }
