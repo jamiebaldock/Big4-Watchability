@@ -18,7 +18,7 @@ struct GamesView: View {
                     }
                 }
                 .task { await viewModel.load() }
-                .onChange(of: viewModel.leagueGroup) {
+                .onChange(of: viewModel.leagueGroup) { _ in
                     Task { await viewModel.load() }
                 }
                 .refreshable { await viewModel.load() }
@@ -30,9 +30,9 @@ struct GamesView: View {
         if viewModel.isLoading && viewModel.games.isEmpty {
             ProgressView()
         } else if let message = viewModel.errorMessage {
-            ContentUnavailableView(message, systemImage: "wifi.slash")
+            EmptyStateView(title: message, systemImage: "wifi.slash")
         } else if viewModel.games.isEmpty {
-            ContentUnavailableView("No games today", systemImage: "sportscourt")
+            EmptyStateView(title: "No games today", systemImage: "sportscourt")
         } else {
             List(viewModel.games) { game in
                 GameRow(game: game)
