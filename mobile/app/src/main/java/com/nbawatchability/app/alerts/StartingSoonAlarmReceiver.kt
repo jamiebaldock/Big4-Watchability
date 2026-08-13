@@ -16,6 +16,7 @@ import com.nbawatchability.app.MainActivity
 import com.nbawatchability.app.R
 import com.nbawatchability.app.data.AlertDelivery
 import com.nbawatchability.app.data.AlertsRepository
+import com.nbawatchability.app.ui.DeepLinkViewModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -42,6 +43,8 @@ class StartingSoonAlarmReceiver : BroadcastReceiver() {
         const val EXTRA_AWAY = "away"
         const val EXTRA_HOME = "home"
         const val EXTRA_LEAD_MINUTES = "lead_minutes"
+        const val EXTRA_LEAGUE = "league"
+        const val EXTRA_TIPOFF_UTC = "tipoff_utc"
     }
 
     override fun onReceive(context: Context, intent: Intent) {
@@ -49,6 +52,8 @@ class StartingSoonAlarmReceiver : BroadcastReceiver() {
         val away = intent.getStringExtra(EXTRA_AWAY) ?: return
         val home = intent.getStringExtra(EXTRA_HOME) ?: return
         val leadMinutes = intent.getIntExtra(EXTRA_LEAD_MINUTES, 15)
+        val league = intent.getStringExtra(EXTRA_LEAGUE)
+        val tipoffUtc = intent.getStringExtra(EXTRA_TIPOFF_UTC)
 
         // BroadcastReceiver.onReceive can't suspend - goAsync keeps the
         // process alive for the short DataStore read + notify.
@@ -75,8 +80,21 @@ class StartingSoonAlarmReceiver : BroadcastReceiver() {
                     .setContentIntent(
                         PendingIntent.getActivity(
                             appContext,
-                            0,
-                            Intent(appContext, MainActivity::class.java),
+                            // Per-game request code, matching the notification id below -
+                            // request code 0 would make FLAG_UPDATE_CURRENT collapse two
+                            // concurrently-pending games onto one shared PendingIntent,
+                            // silently rewriting an older notification's extras (and thus
+                            // its deep-link target) to whichever game fired most recently.
+                            eventId.hashCode(),
+                            Intent(appContext, MainActivity::class.java).apply {
+                                // Same deep-link contract as AlertsFirebaseMessagingService -
+                                // only set when all three arrived together, so a tap always
+                                // forces the right league/day instead of landing on whatever
+                                // league happened to be open last.
+                                if (league != null && tipoffUtc != null) {
+                                    DeepLinkViewModel.putExtras(this, eventId, league, tipoffUtc)
+                                }
+                            },
                             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
                         )
                     )

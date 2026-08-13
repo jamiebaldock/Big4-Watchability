@@ -67,7 +67,7 @@ class AlertsViewModel(application: Application) : AndroidViewModel(application) 
         val eventId = game.eventId ?: return
         val subscribe = eventId !in belledGameIds
         viewModelScope.launch {
-            repository.setBelled(BelledGameSnapshot(eventId, game.away, game.home, game.tipoffUtc), subscribe)
+            repository.setBelled(BelledGameSnapshot(eventId, game.away, game.home, game.tipoffUtc, game.league), subscribe)
             val deviceId = repository.getOrCreateDeviceId()
             runCatching { AlertsNetworkRepository.setGameSub(BACKEND_BASE_URL, deviceId, eventId, subscribe) }
             // A newly belled game inside the 48h alarm horizon needs its
