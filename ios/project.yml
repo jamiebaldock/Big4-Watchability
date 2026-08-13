@@ -1,0 +1,27 @@
+name: Big4Watchability
+options:
+  bundleIdPrefix: com.nbawatchability
+  deploymentTarget:
+    iOS: "16.0"
+configs:
+  Debug: debug
+  Release: release
+targets:
+  Big4Watchability:
+    type: application
+    platform: iOS
+    sources:
+      - path: Big4Watchability/Sources
+    resources:
+      - path: Big4Watchability/Resources
+    info:
+      path: Big4Watchability/Resources/Info.plist
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.nbawatchability.app
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        DEVELOPMENT_TEAM: ""
+        CODE_SIGN_STYLE: Automatic

@@ -41,6 +41,13 @@ mobile/keystore.properties
 Big4Watchability Phone App/
 mobile/apk-releases/
 
+# iOS - Big4Watchability.xcodeproj is generated from ios/project.yml by
+# XcodeGen (both locally and in build-ios.yml's CI step), never hand-edited,
+# so it doesn't belong in git - same reasoning as not committing Gradle's
+# generated build/ output.
+ios/*.xcodeproj/
+ios/DerivedData/
+
 # OS
 .DS_Store
 Thumbs.db
