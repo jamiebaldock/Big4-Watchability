@@ -4,6 +4,7 @@ struct GamesView: View {
     @StateObject private var viewModel = GamesViewModel()
     @ObservedObject private var favorites = FavoritesStore.shared
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
+    @ObservedObject private var starred = StarredGamesStore.shared
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
 
@@ -44,6 +45,14 @@ struct GamesView: View {
                     showNumericScore: showNumericScore,
                     weights: weightsStore.weights(for: viewModel.leagueGroup)
                 )
+                .swipeActions(edge: .leading) {
+                    Button {
+                        starred.toggle(game)
+                    } label: {
+                        Label(starred.isStarred(game) ? "Unstar" : "Star", systemImage: starred.isStarred(game) ? "star.slash" : "star.fill")
+                    }
+                    .tint(.yellow)
+                }
             }
             .listStyle(.plain)
         }

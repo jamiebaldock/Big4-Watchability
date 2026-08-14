@@ -1,11 +1,11 @@
 import SwiftUI
 
-// Seventh vertical slice adds Settings - reaches feature-count parity with
-// Android's 7 BottomNavTab entries (Games/Starred/Favorites/History/Leaders/
-// News/Settings), though Starred and several Settings toggles still need
-// their own wiring - see SettingsView.swift/AppSettingsKeys.swift. Leaders
-// on Android is a swipeable Standings+Stats combo; kept as two separate tabs
-// here since iOS doesn't have an obvious equivalent gesture convention.
+// Eighth vertical slice adds Starred - full parity with Android's 7
+// BottomNavTab entries reached (Games/Starred/Favorites/History/Leaders/
+// News/Settings), though several Settings toggles are still inert - see
+// SettingsView.swift/AppSettingsKeys.swift. Leaders on Android is a
+// swipeable Standings+Stats combo; kept as two separate tabs here since iOS
+// doesn't have an obvious equivalent gesture convention.
 struct RootView: View {
     @AppStorage(AppSettingsKeys.lightTheme) private var lightTheme = false
 
@@ -14,6 +14,10 @@ struct RootView: View {
             GamesView()
                 .tabItem {
                     Label("Games", systemImage: "sportscourt")
+                }
+            StarredView()
+                .tabItem {
+                    Label("Starred", systemImage: "star.circle")
                 }
             FavoritesView()
                 .tabItem {
