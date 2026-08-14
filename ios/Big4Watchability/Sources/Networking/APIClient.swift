@@ -80,6 +80,26 @@ struct APIClient {
     func news(leagueGroup: LeagueGroup) async throws -> NewsResponse {
         try await get("/news?leagueGroup=\(leagueGroup.apiValue)")
     }
+
+    /// GET /api/history?start=&end=&leagueGroup=
+    func history(start: String, end: String, leagueGroup: LeagueGroup) async throws -> HistoryResponse {
+        try await get("/api/history?start=\(start)&end=\(end)&leagueGroup=\(leagueGroup.apiValue)")
+    }
+
+    /// GET /current-season-start?leagueGroup=
+    func currentSeasonStart(leagueGroup: LeagueGroup) async throws -> CurrentSeasonStartResponse {
+        try await get("/current-season-start?leagueGroup=\(leagueGroup.apiValue)")
+    }
+
+    /// GET /teams?leagueGroup=
+    func teams(leagueGroup: LeagueGroup) async throws -> TeamsResponse {
+        try await get("/teams?leagueGroup=\(leagueGroup.apiValue)")
+    }
+
+    /// GET /roster?leagueGroup=&team=
+    func roster(leagueGroup: LeagueGroup, team: String) async throws -> RosterResponse {
+        try await get("/roster?leagueGroup=\(leagueGroup.apiValue)&team=\(team)")
+    }
 }
 
 struct SeasonWindowResponse: Codable {

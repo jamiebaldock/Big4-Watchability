@@ -1,7 +1,7 @@
 import SwiftUI
 
-// Fourth vertical slice adds Stats. Favorites/History/Alerts/Settings tabs
-// still to come - see mobile/app/.../ui/ for the Android tab set to mirror
+// Fifth vertical slice adds Favorites. History/Alerts/Settings tabs still to
+// come - see mobile/app/.../ui/ for the Android tab set to mirror
 // (BottomNavTab: Games/Starred/Favorites/History/Leaders/News/Settings -
 // Leaders on Android is a swipeable Standings+Stats combo; kept as two
 // separate tabs here since iOS doesn't have an obvious equivalent gesture
@@ -12,6 +12,10 @@ struct RootView: View {
             GamesView()
                 .tabItem {
                     Label("Games", systemImage: "sportscourt")
+                }
+            FavoritesView()
+                .tabItem {
+                    Label("Favorites", systemImage: "star")
                 }
             StandingsView()
                 .tabItem {
