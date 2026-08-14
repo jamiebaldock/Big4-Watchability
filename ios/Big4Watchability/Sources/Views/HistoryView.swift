@@ -5,6 +5,11 @@ import SwiftUI
 // through (see GameJson.awayScore/homeScore's doc comment).
 struct HistoryView: View {
     @StateObject private var viewModel = HistoryViewModel()
+    @ObservedObject private var weightsStore = RubricWeightsStore.shared
+    @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
+    @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
+    @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
+    @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
 
     var body: some View {
         NavigationStack {
@@ -38,7 +43,16 @@ struct HistoryView: View {
             EmptyStateView(title: "No watchable games yet this season", systemImage: "clock.arrow.circlepath")
         } else {
             List(viewModel.games) { game in
-                HistoryRow(game: game)
+                HistoryRow(
+                    game: game,
+                    showNumericScore: showNumericScore,
+                    scoreAndTier: game.effectiveScoreAndTier(
+                        nba: weightsStore.weights(for: viewModel.leagueGroup),
+                        mlb: mlbWeightsStore.weights,
+                        nfl: nflWeightsStore.weights,
+                        nhl: nhlWeightsStore.weights
+                    )
+                )
             }
             .listStyle(.plain)
         }
@@ -47,6 +61,8 @@ struct HistoryView: View {
 
 private struct HistoryRow: View {
     let game: GameJson
+    let showNumericScore: Bool
+    let scoreAndTier: (score: Int, tier: WatchabilityTier)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -54,10 +70,8 @@ private struct HistoryRow: View {
                 Text(matchupText)
                     .font(.headline)
                 Spacer()
-                if let score = game.score {
-                    Text("\(score)")
-                        .font(.caption.bold())
-                        .foregroundStyle(.secondary)
+                if let scoreAndTier {
+                    ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
                 }
             }
             Text(game.hook)

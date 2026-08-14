@@ -4,6 +4,11 @@ import SwiftUI
 // StarredGamesStore already holds full game snapshots.
 struct StarredView: View {
     @ObservedObject private var store = StarredGamesStore.shared
+    @ObservedObject private var weightsStore = RubricWeightsStore.shared
+    @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
+    @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
+    @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
+    @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
 
     var body: some View {
         NavigationStack {
@@ -13,12 +18,21 @@ struct StarredView: View {
             } else {
                 List {
                     ForEach(store.games) { game in
-                        StarredRow(game: game)
-                            .swipeActions {
-                                Button("Unstar", role: .destructive) {
-                                    store.toggle(game)
-                                }
+                        StarredRow(
+                            game: game,
+                            showNumericScore: showNumericScore,
+                            scoreAndTier: game.effectiveScoreAndTier(
+                                nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
+                                mlb: mlbWeightsStore.weights,
+                                nfl: nflWeightsStore.weights,
+                                nhl: nhlWeightsStore.weights
+                            )
+                        )
+                        .swipeActions {
+                            Button("Unstar", role: .destructive) {
+                                store.toggle(game)
                             }
+                        }
                     }
                 }
                 .listStyle(.plain)
@@ -30,11 +44,19 @@ struct StarredView: View {
 
 private struct StarredRow: View {
     let game: GameJson
+    let showNumericScore: Bool
+    let scoreAndTier: (score: Int, tier: WatchabilityTier)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
-                .font(.headline)
+            HStack {
+                Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
+                    .font(.headline)
+                Spacer()
+                if game.scoreVisible, let scoreAndTier {
+                    ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
+                }
+            }
             Text(game.hook)
                 .font(.subheadline)
                 .foregroundStyle(.secondary)

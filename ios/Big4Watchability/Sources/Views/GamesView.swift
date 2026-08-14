@@ -46,10 +46,12 @@ struct GamesView: View {
                 GameRow(
                     game: game,
                     showNumericScore: showNumericScore,
-                    weights: weightsStore.weights(for: viewModel.leagueGroup),
-                    mlbWeights: mlbWeightsStore.weights,
-                    nflWeights: nflWeightsStore.weights,
-                    nhlWeights: nhlWeightsStore.weights
+                    scoreAndTier: game.effectiveScoreAndTier(
+                        nba: weightsStore.weights(for: viewModel.leagueGroup),
+                        mlb: mlbWeightsStore.weights,
+                        nfl: nflWeightsStore.weights,
+                        nhl: nhlWeightsStore.weights
+                    )
                 )
                 .swipeActions(edge: .leading) {
                     Button {
@@ -88,10 +90,7 @@ struct GamesView: View {
 private struct GameRow: View {
     let game: GameJson
     let showNumericScore: Bool
-    let weights: RubricWeights
-    let mlbWeights: MlbRubricWeights
-    let nflWeights: NflRubricWeights
-    let nhlWeights: NhlRubricWeights
+    let scoreAndTier: (score: Int, tier: WatchabilityTier)?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -99,8 +98,8 @@ private struct GameRow: View {
                 Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
                     .font(.headline)
                 Spacer()
-                if game.scoreVisible, let score = displayScore, let tier = displayTier {
-                    ScoreBadge(score: score, tier: tier, showNumber: showNumericScore)
+                if game.scoreVisible, let scoreAndTier {
+                    ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
                 }
             }
             Text(game.hook)
@@ -109,61 +108,6 @@ private struct GameRow: View {
                 .lineLimit(2)
         }
         .padding(.vertical, 4)
-    }
-
-    // Every league now gets the client-side, weight-adjusted score - each
-    // sport's own tier scale (MLB 60/35/20, NFL 75/54/28, NHL 78/56/29)
-    // isn't basketball's 85/65/45, see the per-sport Rubric files.
-    private var displayScore: Int? {
-        switch game.lg {
-        case .nba, .wnba: return game.effectiveScore(weights: weights)
-        case .mlb: return game.effectiveMlbScore(weights: mlbWeights)
-        case .nfl: return game.effectiveNflScore(weights: nflWeights)
-        case .nhl: return game.effectiveNhlScore(weights: nhlWeights)
-        default: return game.score
-        }
-    }
-
-    private var displayTier: WatchabilityTier? {
-        switch game.lg {
-        case .nba, .wnba: return game.effectiveTier(weights: weights)
-        case .mlb: return game.effectiveMlbTier(weights: mlbWeights)
-        case .nfl: return game.effectiveNflTier(weights: nflWeights)
-        case .nhl: return game.effectiveNhlTier(weights: nhlWeights)
-        default:
-            guard let score = game.score else { return nil }
-            return WatchabilityTier.forScore(score)
-        }
-    }
-}
-
-private struct ScoreBadge: View {
-    let score: Int
-    let tier: WatchabilityTier
-    let showNumber: Bool
-
-    var body: some View {
-        Group {
-            if showNumber {
-                Text("\(score)")
-            } else {
-                Circle().frame(width: 8, height: 8)
-            }
-        }
-        .font(.caption.bold())
-        .padding(.horizontal, showNumber ? 8 : 6)
-        .padding(.vertical, 4)
-        .background(tint.opacity(0.15), in: Capsule())
-        .foregroundStyle(tint)
-    }
-
-    private var tint: Color {
-        switch tier {
-        case .instantClassic: return .red
-        case .worthYourTime: return .orange
-        case .solid: return .yellow
-        case .skippable: return .gray
-        }
     }
 }
 

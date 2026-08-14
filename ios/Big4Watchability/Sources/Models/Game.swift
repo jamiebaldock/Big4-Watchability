@@ -9,6 +9,18 @@ enum LeagueGroup: String, Codable, CaseIterable, Identifiable {
 
     var id: String { rawValue }
     var apiValue: String { rawValue }
+
+    // "summer" (WNBA offseason/exhibition play) has no LeagueGroup of its
+    // own - maps to wnba, same as Game.kt's isSummerLeague treatment.
+    init(espnLeague: EspnLeague) {
+        switch espnLeague {
+        case .nba: self = .nba
+        case .wnba, .summer: self = .wnba
+        case .mlb: self = .mlb
+        case .nfl: self = .nfl
+        case .nhl: self = .nhl
+        }
+    }
 }
 
 enum Sport: String, Codable {
