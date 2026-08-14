@@ -3,6 +3,7 @@ import SwiftUI
 struct GamesView: View {
     @StateObject private var viewModel = GamesViewModel()
     @ObservedObject private var favorites = FavoritesStore.shared
+    @ObservedObject private var appSettings = AppSettingsStore.shared
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
     @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
@@ -24,19 +25,23 @@ struct GamesView: View {
                 .navigationTitle("Games")
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        Picker("League", selection: $viewModel.leagueGroup) {
+                        Picker("League", selection: leagueSelectionBinding) {
+                            Text("ALL").tag("all")
                             ForEach(LeagueGroup.allCases) { league in
-                                Text(league.rawValue.uppercased()).tag(league)
+                                Text(league.rawValue.uppercased()).tag(league.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                     }
                 }
-                .task { await viewModel.load() }
+                .task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 .onChange(of: viewModel.leagueGroup) { _ in
-                    Task { await viewModel.load() }
+                    Task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 }
-                .refreshable { await viewModel.load() }
+                .onChange(of: appSettings.isAllLeaguesSelected) { _ in
+                    Task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
+                }
+                .refreshable { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 .fullScreenCover(isPresented: Binding(
                     get: { selectedHighlightsVideoId != nil },
                     set: { if !$0 { selectedHighlightsVideoId = nil } }
@@ -48,7 +53,7 @@ struct GamesView: View {
                 .sheet(item: $selectedGameForDetail) { game in
                     GameDetailView(
                         game: game,
-                        nbaWeights: weightsStore.weights(for: viewModel.leagueGroup),
+                        nbaWeights: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
                         wnbaWeights: weightsStore.weights(for: .wnba),
                         mlbWeights: mlbWeightsStore.weights,
                         nflWeights: nflWeightsStore.weights,
@@ -77,7 +82,7 @@ struct GamesView: View {
                     game: game,
                     showNumericScore: showNumericScore,
                     scoreAndTier: game.effectiveScoreAndTier(
-                        nba: weightsStore.weights(for: viewModel.leagueGroup),
+                        nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
                         mlb: mlbWeightsStore.weights,
                         nfl: nflWeightsStore.weights,
                         nhl: nhlWeightsStore.weights
@@ -106,12 +111,14 @@ struct GamesView: View {
     }
 
     // Mirrors GameListViewModel.kt's favorite-team bump: favorited teams'
-    // games float to the top, stable order otherwise preserved.
+    // games float to the top, stable order otherwise preserved. In All
+    // Leagues mode there's no single "current league" to scope the name
+    // match to, so every favorited team across every league counts.
     private var orderedGames: [GameJson] {
         guard bumpFavoriteTeamGames else { return viewModel.games }
         let favoriteNames = Set(
             favorites.teams
-                .filter { $0.leagueGroup == viewModel.leagueGroup }
+                .filter { appSettings.isAllLeaguesSelected || $0.leagueGroup == viewModel.leagueGroup }
                 .map { $0.team.name }
         )
         guard !favoriteNames.isEmpty else { return viewModel.games }
@@ -129,10 +136,27 @@ struct GamesView: View {
         orderedGames.filteredByMinTier(
             enabled: minTierFilterEnabled,
             minTier: WatchabilityTier(rawValue: minTierFilterRawValue) ?? .skippable,
-            nba: { _ in weightsStore.weights(for: viewModel.leagueGroup) },
+            nba: { game in weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)) },
             mlb: mlbWeightsStore.weights,
             nfl: nflWeightsStore.weights,
             nhl: nhlWeightsStore.weights
+        )
+    }
+
+    // "ALL" plus each LeagueGroup's rawValue as the Picker's tag space -
+    // reading/writing through appSettings.isAllLeaguesSelected and
+    // viewModel.leagueGroup together so one segmented control drives both.
+    private var leagueSelectionBinding: Binding<String> {
+        Binding(
+            get: { appSettings.isAllLeaguesSelected ? "all" : viewModel.leagueGroup.rawValue },
+            set: { newValue in
+                if newValue == "all" {
+                    appSettings.isAllLeaguesSelected = true
+                } else if let league = LeagueGroup(rawValue: newValue) {
+                    appSettings.isAllLeaguesSelected = false
+                    viewModel.leagueGroup = league
+                }
+            }
         )
     }
 }

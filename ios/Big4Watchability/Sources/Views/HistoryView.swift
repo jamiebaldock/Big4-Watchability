@@ -5,6 +5,7 @@ import SwiftUI
 // through (see GameJson.awayScore/homeScore's doc comment).
 struct HistoryView: View {
     @StateObject private var viewModel = HistoryViewModel()
+    @ObservedObject private var appSettings = AppSettingsStore.shared
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
     @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
@@ -24,19 +25,23 @@ struct HistoryView: View {
                 .navigationTitle("History")
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        Picker("League", selection: $viewModel.leagueGroup) {
+                        Picker("League", selection: leagueSelectionBinding) {
+                            Text("ALL").tag("all")
                             ForEach(LeagueGroup.allCases) { league in
-                                Text(league.rawValue.uppercased()).tag(league)
+                                Text(league.rawValue.uppercased()).tag(league.rawValue)
                             }
                         }
                         .pickerStyle(.segmented)
                     }
                 }
-                .task { await viewModel.load() }
+                .task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 .onChange(of: viewModel.leagueGroup) { _ in
-                    Task { await viewModel.load() }
+                    Task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 }
-                .refreshable { await viewModel.load() }
+                .onChange(of: appSettings.isAllLeaguesSelected) { _ in
+                    Task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
+                }
+                .refreshable { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 .fullScreenCover(isPresented: Binding(
                     get: { selectedHighlightsVideoId != nil },
                     set: { if !$0 { selectedHighlightsVideoId = nil } }
@@ -48,7 +53,7 @@ struct HistoryView: View {
                 .sheet(item: $selectedGameForDetail) { game in
                     GameDetailView(
                         game: game,
-                        nbaWeights: weightsStore.weights(for: viewModel.leagueGroup),
+                        nbaWeights: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
                         wnbaWeights: weightsStore.weights(for: .wnba),
                         mlbWeights: mlbWeightsStore.weights,
                         nflWeights: nflWeightsStore.weights,
@@ -77,7 +82,7 @@ struct HistoryView: View {
                     game: game,
                     showNumericScore: showNumericScore,
                     scoreAndTier: game.effectiveScoreAndTier(
-                        nba: weightsStore.weights(for: viewModel.leagueGroup),
+                        nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
                         mlb: mlbWeightsStore.weights,
                         nfl: nflWeightsStore.weights,
                         nhl: nhlWeightsStore.weights
@@ -101,10 +106,27 @@ struct HistoryView: View {
         viewModel.games.filteredByMinTier(
             enabled: minTierFilterEnabled,
             minTier: WatchabilityTier(rawValue: minTierFilterRawValue) ?? .skippable,
-            nba: { _ in weightsStore.weights(for: viewModel.leagueGroup) },
+            nba: { game in weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)) },
             mlb: mlbWeightsStore.weights,
             nfl: nflWeightsStore.weights,
             nhl: nhlWeightsStore.weights
+        )
+    }
+
+    // "ALL" plus each LeagueGroup's rawValue as the Picker's tag space -
+    // reading/writing through appSettings.isAllLeaguesSelected and
+    // viewModel.leagueGroup together so one segmented control drives both.
+    private var leagueSelectionBinding: Binding<String> {
+        Binding(
+            get: { appSettings.isAllLeaguesSelected ? "all" : viewModel.leagueGroup.rawValue },
+            set: { newValue in
+                if newValue == "all" {
+                    appSettings.isAllLeaguesSelected = true
+                } else if let league = LeagueGroup(rawValue: newValue) {
+                    appSettings.isAllLeaguesSelected = false
+                    viewModel.leagueGroup = league
+                }
+            }
         )
     }
 }

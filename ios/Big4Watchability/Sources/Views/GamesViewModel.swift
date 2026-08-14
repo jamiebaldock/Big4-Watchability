@@ -17,16 +17,37 @@ final class GamesViewModel: ObservableObject {
         self.client = client
     }
 
-    func load(date: Date = Date()) async {
+    func load(date: Date = Date(), allLeagues: Bool = false) async {
         isLoading = true
         errorMessage = nil
         defer { isLoading = false }
 
         let day = Self.dayFormatter.string(from: date)
         do {
-            games = try await client.schedule(start: day, end: day, leagueGroup: leagueGroup)
+            if allLeagues {
+                games = try await Self.fetchAllLeagues(day: day, client: client)
+            } else {
+                games = try await client.schedule(start: day, end: day, leagueGroup: leagueGroup)
+            }
         } catch {
             errorMessage = "Couldn't load games: \(error.localizedDescription)"
+        }
+    }
+
+    // Every league is an independent request, fired concurrently rather
+    // than awaited one at a time - mirrors GameListViewModel.kt's
+    // fetchScheduleChunked, which fixed a real "sequential awaiting" load
+    // time regression (P1 investigation, see project memory).
+    private static func fetchAllLeagues(day: String, client: APIClient) async throws -> [GameJson] {
+        try await withThrowingTaskGroup(of: [GameJson].self) { group in
+            for league in LeagueGroup.allCases {
+                group.addTask { try await client.schedule(start: day, end: day, leagueGroup: league) }
+            }
+            var merged: [GameJson] = []
+            for try await batch in group {
+                merged += batch
+            }
+            return merged.sorted { $0.utc < $1.utc }
         }
     }
 
