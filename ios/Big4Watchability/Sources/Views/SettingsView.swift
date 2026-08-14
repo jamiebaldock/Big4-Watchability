@@ -27,7 +27,12 @@ struct SettingsView: View {
                     Toggle("Wi-Fi only", isOn: $wifiOnlyHighlights)
                 }
                 Section {
-                    Text("Rubric weight sliders, alerts, and admin tools are coming in a later build.")
+                    NavigationLink("Rubric Weights") {
+                        RubricWeightsView()
+                    }
+                }
+                Section {
+                    Text("Alerts and admin tools are coming in a later build.")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
