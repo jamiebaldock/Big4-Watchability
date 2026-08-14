@@ -12,6 +12,9 @@ struct GamesView: View {
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
     @AppStorage(AppSettingsKeys.confettiEnabled) private var confettiEnabled = true
+    @AppStorage(AppSettingsKeys.minTierFilterEnabled) private var minTierFilterEnabled = false
+    @AppStorage(AppSettingsKeys.minTierFilter) private var minTierFilterRawValue = WatchabilityTier.skippable.rawValue
+    @AppStorage(AppSettingsKeys.defaultGameDetailTab) private var defaultGameDetailTabRawValue = GameDetailTab.breakdown.rawValue
     @State private var selectedHighlightsVideoId: String?
     @State private var selectedGameForDetail: GameJson?
 
@@ -50,6 +53,7 @@ struct GamesView: View {
                         mlbWeights: mlbWeightsStore.weights,
                         nflWeights: nflWeightsStore.weights,
                         nhlWeights: nhlWeightsStore.weights,
+                        defaultTab: GameDetailTab(rawValue: defaultGameDetailTabRawValue) ?? .breakdown,
                         onWatchHighlights: { videoId in
                             selectedGameForDetail = nil
                             selectedHighlightsVideoId = videoId
@@ -68,7 +72,7 @@ struct GamesView: View {
         } else if viewModel.games.isEmpty {
             EmptyStateView(title: "No games today", systemImage: "sportscourt")
         } else {
-            List(orderedGames) { game in
+            List(displayedGames) { game in
                 GameRow(
                     game: game,
                     showNumericScore: showNumericScore,
@@ -119,6 +123,17 @@ struct GamesView: View {
             }
         }
         return favored + rest
+    }
+
+    private var displayedGames: [GameJson] {
+        orderedGames.filteredByMinTier(
+            enabled: minTierFilterEnabled,
+            minTier: WatchabilityTier(rawValue: minTierFilterRawValue) ?? .skippable,
+            nba: { _ in weightsStore.weights(for: viewModel.leagueGroup) },
+            mlb: mlbWeightsStore.weights,
+            nfl: nflWeightsStore.weights,
+            nhl: nhlWeightsStore.weights
+        )
     }
 }
 

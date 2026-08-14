@@ -11,8 +11,22 @@ struct StarredView: View {
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
     @AppStorage(AppSettingsKeys.confettiEnabled) private var confettiEnabled = true
+    @AppStorage(AppSettingsKeys.minTierFilterEnabled) private var minTierFilterEnabled = false
+    @AppStorage(AppSettingsKeys.minTierFilter) private var minTierFilterRawValue = WatchabilityTier.skippable.rawValue
+    @AppStorage(AppSettingsKeys.defaultGameDetailTab) private var defaultGameDetailTabRawValue = GameDetailTab.breakdown.rawValue
     @State private var selectedGameForDetail: GameJson?
     @State private var selectedHighlightsVideoId: String?
+
+    private var displayedGames: [GameJson] {
+        store.games.filteredByMinTier(
+            enabled: minTierFilterEnabled,
+            minTier: WatchabilityTier(rawValue: minTierFilterRawValue) ?? .skippable,
+            nba: { game in weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)) },
+            mlb: mlbWeightsStore.weights,
+            nfl: nflWeightsStore.weights,
+            nhl: nhlWeightsStore.weights
+        )
+    }
 
     var body: some View {
         NavigationStack {
@@ -21,7 +35,7 @@ struct StarredView: View {
                     EmptyStateView(title: "Star a game to find it here", systemImage: "star")
                 } else {
                     List {
-                        ForEach(store.games) { game in
+                        ForEach(displayedGames) { game in
                             StarredRow(
                                 game: game,
                                 showNumericScore: showNumericScore,
@@ -68,6 +82,7 @@ struct StarredView: View {
                     mlbWeights: mlbWeightsStore.weights,
                     nflWeights: nflWeightsStore.weights,
                     nhlWeights: nhlWeightsStore.weights,
+                    defaultTab: GameDetailTab(rawValue: defaultGameDetailTabRawValue) ?? .breakdown,
                     onWatchHighlights: { videoId in
                         selectedGameForDetail = nil
                         selectedHighlightsVideoId = videoId

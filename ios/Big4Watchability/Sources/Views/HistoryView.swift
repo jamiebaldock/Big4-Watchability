@@ -14,6 +14,9 @@ struct HistoryView: View {
     @State private var selectedHighlightsVideoId: String?
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
     @AppStorage(AppSettingsKeys.confettiEnabled) private var confettiEnabled = true
+    @AppStorage(AppSettingsKeys.minTierFilterEnabled) private var minTierFilterEnabled = false
+    @AppStorage(AppSettingsKeys.minTierFilter) private var minTierFilterRawValue = WatchabilityTier.skippable.rawValue
+    @AppStorage(AppSettingsKeys.defaultGameDetailTab) private var defaultGameDetailTabRawValue = GameDetailTab.breakdown.rawValue
 
     var body: some View {
         NavigationStack {
@@ -50,6 +53,7 @@ struct HistoryView: View {
                         mlbWeights: mlbWeightsStore.weights,
                         nflWeights: nflWeightsStore.weights,
                         nhlWeights: nhlWeightsStore.weights,
+                        defaultTab: GameDetailTab(rawValue: defaultGameDetailTabRawValue) ?? .breakdown,
                         onWatchHighlights: { videoId in
                             selectedGameForDetail = nil
                             selectedHighlightsVideoId = videoId
@@ -68,7 +72,7 @@ struct HistoryView: View {
         } else if viewModel.games.isEmpty {
             EmptyStateView(title: "No watchable games yet this season", systemImage: "clock.arrow.circlepath")
         } else {
-            List(viewModel.games) { game in
+            List(displayedGames) { game in
                 HistoryRow(
                     game: game,
                     showNumericScore: showNumericScore,
@@ -91,6 +95,17 @@ struct HistoryView: View {
             }
             .listStyle(.plain)
         }
+    }
+
+    private var displayedGames: [GameJson] {
+        viewModel.games.filteredByMinTier(
+            enabled: minTierFilterEnabled,
+            minTier: WatchabilityTier(rawValue: minTierFilterRawValue) ?? .skippable,
+            nba: { _ in weightsStore.weights(for: viewModel.leagueGroup) },
+            mlb: mlbWeightsStore.weights,
+            nfl: nflWeightsStore.weights,
+            nhl: nhlWeightsStore.weights
+        )
     }
 }
 
