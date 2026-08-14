@@ -117,12 +117,43 @@ private fun LockLandscapeFullscreen() {
 // to a browser otherwise - no vnd.youtube: scheme trickery needed. Wrapped
 // in a try/catch purely for the no-app-can-handle-this edge case (e.g. a
 // stripped-down device build with neither YouTube nor a browser present),
-// which would otherwise crash with ActivityNotFoundException.
-private fun openInYoutubeApp(context: Context, videoId: String): Boolean = try {
+// which would otherwise crash with ActivityNotFoundException. Not private -
+// watchHighlights below (and this screen's own onError fallback) both call
+// it directly.
+fun openInYoutubeApp(context: Context, videoId: String): Boolean = try {
     context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
     true
 } catch (e: ActivityNotFoundException) {
     false
+}
+
+/**
+ * Single entry point every "watch this game's highlights" tap should go
+ * through (GameCard.kt's HighlightsRow, GameDetailScreen.kt's Watch
+ * button). NFL's official highlight uploads have never actually embedded
+ * successfully in this app - confirmed as a 100% failure rate (James's
+ * report, 2026-08-14), consistent with the one earlier confirmed case
+ * (2026-08-07's Hall of Fame Game hitting the exact same
+ * VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER error HighlightsPlayerScreen's own
+ * onError falls back on). Most likely cause: NFL domain-restricts embedding
+ * to its own approved sites, a restriction the YouTube Data API's
+ * `embeddable` field (what backend/src/youtubeClient.ts's match step
+ * checks) doesn't expose, so the backend can never filter it out before
+ * matching. An earlier attempt routed NFL through HighlightsPlayerScreen
+ * anyway with a skip-the-embed flag, but that still opened a whole
+ * intermediate Compose screen before redirecting - visibly flashing on
+ * screen for a frame (James's report) even without ever rotating to
+ * landscape. Intercepting here instead, before any navigation state changes
+ * at all, is a genuine `startActivity` with nothing composed in between -
+ * no flash, because nothing new is ever shown. Every other league still
+ * goes through [openInAppPlayer] for the real in-app landscape player.
+ */
+fun watchHighlights(context: Context, videoId: String, league: String, openInAppPlayer: (String) -> Unit) {
+    if (league == "nfl") {
+        openInYoutubeApp(context, videoId)
+    } else {
+        openInAppPlayer(videoId)
+    }
 }
 
 private fun isOnWifi(context: Context): Boolean {
@@ -152,42 +183,25 @@ private fun isOnWifi(context: Context): Boolean {
  * opens, so a user who's turned this on never has highlights silently start
  * consuming cellular data.
  *
- * [league] gates whether the in-app embed is even attempted. NFL's official
- * highlight uploads have never actually embedded successfully in this app -
- * confirmed live (2026-08-14, James's report) as a 100% failure rate, not
- * an occasional one, consistent with the one earlier confirmed case
- * (2026-08-07's Hall of Fame Game hitting the exact same
- * VIDEO_NOT_PLAYABLE_IN_EMBEDDED_PLAYER error YoutubePlayer's onError below
- * already falls back on). The most likely explanation is that NFL
- * domain-restricts embedding to its own approved sites - a restriction the
- * YouTube Data API's videos.list `embeddable` field (what
- * backend/src/youtubeClient.ts's match step checks) doesn't expose, so the
- * backend can't filter these out before ever matching them. Rather than
- * landscape-locking, hiding the system bars, and mounting a WebView just to
- * immediately tear all of that down again on the guaranteed error, NFL
- * skips straight to a plain "Open in YouTube" prompt - same destination,
- * without the pointless flash. Every other league still attempts the real
- * embed first, same as before.
+ * Only ever reached for a league whose highlights actually embed - callers
+ * should route through [watchHighlights] above, which intercepts NFL before
+ * this screen is ever navigated to at all (NFL's official uploads never
+ * actually embed - see that function's own comment).
  */
 @Composable
-fun HighlightsPlayerScreen(videoId: String, league: String?, onBack: () -> Unit, wifiOnlyEnabled: Boolean) {
+fun HighlightsPlayerScreen(videoId: String, onBack: () -> Unit, wifiOnlyEnabled: Boolean) {
+    LockLandscapeFullscreen()
+
     val context = LocalContext.current
     // Checked once per screen visit (not re-polled) - a connection dropping
     // mid-playback is out of scope here; this only gates the initial load.
     val isWifiConnected = remember(videoId) { isOnWifi(context) }
     var proceedOnCellular by remember(videoId) { mutableStateOf(false) }
     val needsWifiPrompt = wifiOnlyEnabled && !isWifiConnected && !proceedOnCellular
-    val skipEmbed = league == "nfl"
-
-    if (!skipEmbed) {
-        LockLandscapeFullscreen()
-    }
 
     Box(modifier = Modifier.fillMaxSize().background(BackgroundBase)) {
         if (needsWifiPrompt) {
             WifiOnlyPrompt(onWatchAnyway = { proceedOnCellular = true }, onCancel = onBack)
-        } else if (skipEmbed) {
-            ExternalOnlyPrompt(videoId = videoId, onBack = onBack)
         } else {
             YoutubePlayer(videoId = videoId, onBack = onBack)
         }
@@ -238,52 +252,6 @@ private fun WifiOnlyPrompt(onWatchAnyway: () -> Unit, onCancel: () -> Unit) {
         Spacer(modifier = Modifier.padding(top = 8.dp))
         OutlinedButton(onClick = onCancel) {
             Text("Cancel")
-        }
-    }
-}
-
-/**
- * NFL-only path (see HighlightsPlayerScreen's own doc comment) - skips the
- * doomed embed attempt entirely and opens the YouTube app/browser directly.
- * Not landscape-locked (LockLandscapeFullscreen is skipped by the caller for
- * this path too) since nothing plays in this screen itself.
- */
-@Composable
-private fun ExternalOnlyPrompt(videoId: String, onBack: () -> Unit) {
-    val context = LocalContext.current
-    var pendingExternalOpen by remember(videoId) { mutableStateOf(false) }
-    var openFailed by remember(videoId) { mutableStateOf(false) }
-
-    // Same ANR-avoidance reasoning as YoutubePlayer's own pendingExternalOpen
-    // below - onBack() is deferred to its own coroutine dispatch rather than
-    // called synchronously alongside startActivity, so the focus-loss event
-    // this triggers gets a chance to be dispatched before our own teardown
-    // work competes for the main thread.
-    LaunchedEffect(pendingExternalOpen) {
-        if (pendingExternalOpen) onBack()
-    }
-
-    LaunchedEffect(videoId) {
-        if (openInYoutubeApp(context, videoId)) {
-            pendingExternalOpen = true
-        } else {
-            openFailed = true
-        }
-    }
-
-    if (openFailed) {
-        CenteredError("No app on this device can open a YouTube link.") { onBack() }
-    } else {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Text(
-                text = "Opening in YouTube…",
-                color = TextSecondary,
-                style = MaterialTheme.typography.bodyMedium
-            )
         }
     }
 }

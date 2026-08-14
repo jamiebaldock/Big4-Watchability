@@ -46,6 +46,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -109,10 +110,7 @@ fun GameCard(
     showBell: Boolean = false,
     isBelled: Boolean = false,
     onToggleBell: () -> Unit = {},
-    // (videoId, league) - league lets HighlightsPlayerScreen skip straight
-    // to "Open in YouTube" for a league whose official uploads never
-    // actually embed (see that screen's own comment on NFL specifically).
-    onWatchHighlights: (String, String) -> Unit = { _, _ -> },
+    onWatchHighlights: (String) -> Unit = {},
     // History tab only: lets James paste a YouTube link directly onto a
     // final game missing one, instead of going through Admin's own missing-
     // highlights list. Null everywhere else - the row only renders when both
@@ -172,6 +170,7 @@ fun GameCard(
     // marked even when confettiEnabled is off, so turning the setting back
     // on later doesn't retroactively fire it for games that already
     // finished while it was disabled.
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val confettiEnabled = LocalConfettiEnabled.current
     var showConfetti by remember { mutableStateOf(false) }
@@ -345,7 +344,7 @@ fun GameCard(
                 // always-visible affordance rather than something blurred.
                 if (game.status == GameStatus.FINAL && game.youtubeVideoId != null) {
                     HighlightsRow(
-                        onClick = { onWatchHighlights(game.youtubeVideoId, game.league) },
+                        onClick = { watchHighlights(context, game.youtubeVideoId, game.league, onWatchHighlights) },
                         modifier = Modifier.padding(top = 10.dp)
                     )
                 } else if (game.status == GameStatus.FINAL && game.youtubeVideoId == null &&

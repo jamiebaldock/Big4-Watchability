@@ -150,7 +150,7 @@ fun GameDetailScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f)
                         )
-                        Button(onClick = { onWatchHighlights(game.youtubeVideoId!!) }) {
+                        Button(onClick = { watchHighlights(context, game.youtubeVideoId!!, game.league, onWatchHighlights) }) {
                             Text("Watch")
                         }
                     }
