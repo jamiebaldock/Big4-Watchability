@@ -4,21 +4,29 @@ import Foundation
 // standing in for Jetpack DataStore, same "one JSON-encoded list under one
 // key" pattern (full snapshots persisted, not just ids, so favorites render
 // without a re-fetch).
+// Player Hater Mode's cap on simultaneously-hated players (SecretScreenView's
+// own copy says "up to 10 at once") - global, not per-league, matching
+// FavoritesViewModel.kt's MAX_HATED_PLAYERS.
+let maxHatedPlayers = 10
+
 @MainActor
 final class FavoritesStore: ObservableObject {
     static let shared = FavoritesStore()
 
     @Published private(set) var teams: [FavoriteTeam] = []
     @Published private(set) var players: [FavoritePlayer] = []
+    @Published private(set) var hatedPlayers: [FavoritePlayer] = []
 
     private let defaults: UserDefaults
     private let teamsKey = "favorites.teams"
     private let playersKey = "favorites.players"
+    private let hatedPlayersKey = "favorites.hatedPlayers"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
         teams = Self.load(defaults, key: teamsKey) ?? []
         players = Self.load(defaults, key: playersKey) ?? []
+        hatedPlayers = Self.load(defaults, key: hatedPlayersKey) ?? []
     }
 
     func isFavorite(team: TeamJson) -> Bool {
@@ -45,6 +53,31 @@ final class FavoritesStore: ObservableObject {
             players.append(FavoritePlayer(name: player.name, team: team, leagueGroup: leagueGroup, headshot: player.headshot))
         }
         Self.save(defaults, key: playersKey, value: players)
+    }
+
+    func isHated(name: String) -> Bool {
+        hatedPlayers.contains { $0.name == name }
+    }
+
+    /// Returns false (and leaves the list unchanged) if adding would exceed
+    /// maxHatedPlayers - the caller surfaces that as a message same as
+    /// FavoritesViewModel.kt's Toast.
+    @discardableResult
+    func toggleHated(player: PlayerJson, team: String, leagueGroup: LeagueGroup) -> Bool {
+        if let index = hatedPlayers.firstIndex(where: { $0.name == player.name && $0.team == team }) {
+            hatedPlayers.remove(at: index)
+            Self.save(defaults, key: hatedPlayersKey, value: hatedPlayers)
+            return true
+        }
+        guard hatedPlayers.count < maxHatedPlayers else { return false }
+        hatedPlayers.append(FavoritePlayer(name: player.name, team: team, leagueGroup: leagueGroup, headshot: player.headshot))
+        Self.save(defaults, key: hatedPlayersKey, value: hatedPlayers)
+        return true
+    }
+
+    func removeHated(_ player: FavoritePlayer) {
+        hatedPlayers.removeAll { $0.name == player.name && $0.team == player.team }
+        Self.save(defaults, key: hatedPlayersKey, value: hatedPlayers)
     }
 
     private static func load<T: Decodable>(_ defaults: UserDefaults, key: String) -> T? {

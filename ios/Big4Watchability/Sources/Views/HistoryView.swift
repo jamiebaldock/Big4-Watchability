@@ -131,6 +131,9 @@ private struct HistoryRow: View {
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
+            if let performers = game.sop, !performers.isEmpty {
+                StandoutPerformerCallout(game: game, performers: performers)
+            }
         }
         .padding(.vertical, 4)
         .overlay {

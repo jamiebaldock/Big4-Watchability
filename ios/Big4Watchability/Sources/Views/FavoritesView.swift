@@ -3,6 +3,7 @@ import SwiftUI
 struct FavoritesView: View {
     @StateObject private var viewModel = FavoritesViewModel()
     @ObservedObject private var favorites = FavoritesStore.shared
+    @AppStorage(AppSettingsKeys.playerHaterMode) private var playerHaterMode = false
 
     var body: some View {
         NavigationStack {
@@ -35,6 +36,16 @@ struct FavoritesView: View {
                                 Text(favorite.team)
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
+                                if playerHaterMode, let leagueGroup = favorite.leagueGroup {
+                                    let player = PlayerJson(id: favorite.name, name: favorite.name, headshot: favorite.headshot)
+                                    Button {
+                                        favorites.toggleHated(player: player, team: favorite.team, leagueGroup: leagueGroup)
+                                    } label: {
+                                        Image(systemName: favorites.isHated(name: favorite.name) ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                    }
+                                    .buttonStyle(.plain)
+                                    .foregroundStyle(favorites.isHated(name: favorite.name) ? .red : .secondary)
+                                }
                             }
                             .swipeActions {
                                 Button("Remove", role: .destructive) {
@@ -42,6 +53,28 @@ struct FavoritesView: View {
                                         let player = PlayerJson(id: favorite.name, name: favorite.name, headshot: favorite.headshot)
                                         favorites.toggle(player: player, team: favorite.team, leagueGroup: leagueGroup)
                                     }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Player Hater Mode easter egg - only reachable while the
+                // toggle (SecretScreenView) is on, same "never appears while
+                // the mode is off" rule as FavoritesScreen.kt's 5th page.
+                if playerHaterMode, !favorites.hatedPlayers.isEmpty {
+                    Section("👎 Players") {
+                        ForEach(favorites.hatedPlayers) { player in
+                            HStack {
+                                Text(player.name)
+                                Spacer()
+                                Text(player.team)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .swipeActions {
+                                Button("Remove", role: .destructive) {
+                                    favorites.removeHated(player)
                                 }
                             }
                         }
@@ -99,6 +132,7 @@ struct FavoritesView: View {
 private struct RosterSheet: View {
     @ObservedObject var viewModel: FavoritesViewModel
     @ObservedObject private var favorites = FavoritesStore.shared
+    @AppStorage(AppSettingsKeys.playerHaterMode) private var playerHaterMode = false
     let leagueGroup: LeagueGroup
 
     var body: some View {
@@ -108,15 +142,27 @@ private struct RosterSheet: View {
                     ProgressView()
                 } else {
                     List(viewModel.roster) { player in
-                        Button {
-                            favorites.toggle(player: player, team: viewModel.rosterTeamName ?? "", leagueGroup: leagueGroup)
-                        } label: {
-                            HStack {
-                                Text(player.name)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                Image(systemName: favorites.isFavorite(player: player, team: viewModel.rosterTeamName ?? "") ? "star.fill" : "star")
-                                    .foregroundStyle(.yellow)
+                        HStack {
+                            Button {
+                                favorites.toggle(player: player, team: viewModel.rosterTeamName ?? "", leagueGroup: leagueGroup)
+                            } label: {
+                                HStack {
+                                    Text(player.name)
+                                        .foregroundStyle(.primary)
+                                    Spacer()
+                                    Image(systemName: favorites.isFavorite(player: player, team: viewModel.rosterTeamName ?? "") ? "star.fill" : "star")
+                                        .foregroundStyle(.yellow)
+                                }
+                            }
+                            .buttonStyle(.plain)
+                            if playerHaterMode {
+                                Button {
+                                    favorites.toggleHated(player: player, team: viewModel.rosterTeamName ?? "", leagueGroup: leagueGroup)
+                                } label: {
+                                    Image(systemName: favorites.isHated(name: player.name) ? "hand.thumbsdown.fill" : "hand.thumbsdown")
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(favorites.isHated(name: player.name) ? .red : .secondary)
                             }
                         }
                     }
