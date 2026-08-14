@@ -4,6 +4,7 @@ struct GamesView: View {
     @StateObject private var viewModel = GamesViewModel()
     @ObservedObject private var favorites = FavoritesStore.shared
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
+    @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var starred = StarredGamesStore.shared
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
@@ -43,7 +44,8 @@ struct GamesView: View {
                 GameRow(
                     game: game,
                     showNumericScore: showNumericScore,
-                    weights: weightsStore.weights(for: viewModel.leagueGroup)
+                    weights: weightsStore.weights(for: viewModel.leagueGroup),
+                    mlbWeights: mlbWeightsStore.weights
                 )
                 .swipeActions(edge: .leading) {
                     Button {
@@ -83,6 +85,7 @@ private struct GameRow: View {
     let game: GameJson
     let showNumericScore: Bool
     let weights: RubricWeights
+    let mlbWeights: MlbRubricWeights
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -90,8 +93,8 @@ private struct GameRow: View {
                 Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
                     .font(.headline)
                 Spacer()
-                if game.scoreVisible, let score = displayScore {
-                    ScoreBadge(score: score, showNumber: showNumericScore)
+                if game.scoreVisible, let score = displayScore, let tier = displayTier {
+                    ScoreBadge(score: score, tier: tier, showNumber: showNumericScore)
                 }
             }
             Text(game.hook)
@@ -102,19 +105,32 @@ private struct GameRow: View {
         .padding(.vertical, 4)
     }
 
-    // NBA/WNBA get the client-side, weight-adjusted score; every other
-    // league falls back to the server's fixed-1x score until its rubric is
-    // ported too (see Rubric.swift).
+    // NBA/WNBA/MLB get the client-side, weight-adjusted score (each sport's
+    // own tier scale - MLB's 60/35/20 isn't the same as basketball's
+    // 85/65/45, see MlbRubric.swift); NFL/NHL fall back to the server's
+    // fixed-1x score until their rubrics are ported too.
     private var displayScore: Int? {
-        if game.lg == .nba || game.lg == .wnba {
-            return game.effectiveScore(weights: weights)
+        switch game.lg {
+        case .nba, .wnba: return game.effectiveScore(weights: weights)
+        case .mlb: return game.effectiveMlbScore(weights: mlbWeights)
+        default: return game.score
         }
-        return game.score
+    }
+
+    private var displayTier: WatchabilityTier? {
+        switch game.lg {
+        case .nba, .wnba: return game.effectiveTier(weights: weights)
+        case .mlb: return game.effectiveMlbTier(weights: mlbWeights)
+        default:
+            guard let score = game.score else { return nil }
+            return WatchabilityTier.forScore(score)
+        }
     }
 }
 
 private struct ScoreBadge: View {
     let score: Int
+    let tier: WatchabilityTier
     let showNumber: Bool
 
     var body: some View {
@@ -133,7 +149,7 @@ private struct ScoreBadge: View {
     }
 
     private var tint: Color {
-        switch WatchabilityTier.forScore(score) {
+        switch tier {
         case .instantClassic: return .red
         case .worthYourTime: return .orange
         case .solid: return .yellow
