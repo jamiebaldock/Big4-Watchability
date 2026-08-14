@@ -10,6 +10,8 @@ struct GamesView: View {
     @ObservedObject private var starred = StarredGamesStore.shared
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
+    @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
+    @State private var selectedHighlightsVideoId: String?
 
     var body: some View {
         NavigationStack {
@@ -30,6 +32,14 @@ struct GamesView: View {
                     Task { await viewModel.load() }
                 }
                 .refreshable { await viewModel.load() }
+                .fullScreenCover(isPresented: Binding(
+                    get: { selectedHighlightsVideoId != nil },
+                    set: { if !$0 { selectedHighlightsVideoId = nil } }
+                )) {
+                    if let videoId = selectedHighlightsVideoId {
+                        HighlightsPlayerView(videoId: videoId, wifiOnlyEnabled: wifiOnlyHighlights)
+                    }
+                }
         }
     }
 
@@ -53,6 +63,12 @@ struct GamesView: View {
                         nhl: nhlWeightsStore.weights
                     )
                 )
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    if let videoId = game.yt {
+                        selectedHighlightsVideoId = videoId
+                    }
+                }
                 .swipeActions(edge: .leading) {
                     Button {
                         starred.toggle(game)
@@ -97,6 +113,11 @@ private struct GameRow: View {
             HStack {
                 Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
                     .font(.headline)
+                if game.yt != nil {
+                    Image(systemName: "play.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.subheadline)
+                }
                 Spacer()
                 if game.scoreVisible, let scoreAndTier {
                     ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
