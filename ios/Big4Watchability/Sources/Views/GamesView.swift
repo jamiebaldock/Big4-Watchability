@@ -11,6 +11,7 @@ struct GamesView: View {
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
+    @AppStorage(AppSettingsKeys.confettiEnabled) private var confettiEnabled = true
     @State private var selectedHighlightsVideoId: String?
     @State private var selectedGameForDetail: GameJson?
 
@@ -76,7 +77,8 @@ struct GamesView: View {
                         mlb: mlbWeightsStore.weights,
                         nfl: nflWeightsStore.weights,
                         nhl: nhlWeightsStore.weights
-                    )
+                    ),
+                    confettiEnabled: confettiEnabled
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
@@ -124,6 +126,9 @@ private struct GameRow: View {
     let game: GameJson
     let showNumericScore: Bool
     let scoreAndTier: (score: Int, tier: WatchabilityTier)?
+    let confettiEnabled: Bool
+
+    @State private var showConfetti = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -146,6 +151,23 @@ private struct GameRow: View {
                 .lineLimit(2)
         }
         .padding(.vertical, 4)
+        .overlay {
+            if showConfetti {
+                GeometryReader { proxy in
+                    ConfettiBurst(onFinished: { showConfetti = false })
+                        .frame(width: proxy.size.width, height: proxy.size.height)
+                }
+                .allowsHitTesting(false)
+            }
+        }
+        .task(id: "\(game.id)-\(scoreAndTier?.tier.rawValue ?? "")-\(game.stt.rawValue)") {
+            guard let scoreAndTier, scoreAndTier.tier == .instantClassic, game.stt == .final else { return }
+            guard InstantClassicCelebrationTracker.markIfFirstTime(game.id) else { return }
+            if confettiEnabled {
+                showConfetti = true
+                fireInstantClassicHaptic()
+            }
+        }
     }
 }
 
