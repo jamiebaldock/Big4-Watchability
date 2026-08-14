@@ -154,7 +154,7 @@ fun HistoryScreen(
     nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     selectedLeague: LeagueGroup,
     onLeagueSelected: (LeagueGroup) -> Unit,
     enabledLeagues: Set<LeagueGroup>,

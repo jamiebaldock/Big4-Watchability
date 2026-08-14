@@ -66,7 +66,7 @@ fun StarredScreen(
     nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     isRefreshing: Boolean,
     onRefresh: () -> Unit,
     selectedLeague: LeagueGroup,

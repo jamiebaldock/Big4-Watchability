@@ -122,6 +122,11 @@ fun AppRoot() {
     var defaultLeagueForAddScreens by rememberSaveable { mutableStateOf(LeagueGroup.NBA) }
     var showAlertsSettings by rememberSaveable { mutableStateOf(false) }
     var highlightsVideoId by rememberSaveable { mutableStateOf<String?>(null) }
+    // Threaded alongside highlightsVideoId (not derived from it) so
+    // HighlightsPlayerScreen can skip straight to "Open in YouTube" for a
+    // league whose official uploads never actually embed - see that
+    // screen's own comment for why NFL specifically needs this.
+    var highlightsLeague by rememberSaveable { mutableStateOf<String?>(null) }
     // Plain remember (not rememberSaveable) - Game isn't a Bundle-compatible
     // type, and losing this particular bit of state across a process death/
     // rotation (falling back to whatever tab was showing) is an acceptable
@@ -207,6 +212,7 @@ fun AppRoot() {
         showHatedPlayers = false
         showAlertsSettings = false
         highlightsVideoId = null
+        highlightsLeague = null
         showGameDetail = null
         selectedTab = BottomNavTab.GAMES
         pendingJumpLeague = link.league
@@ -228,7 +234,7 @@ fun AppRoot() {
     BackHandler(enabled = showFavoritePlayers) { showFavoritePlayers = false }
     BackHandler(enabled = showHatedPlayers) { showHatedPlayers = false }
     BackHandler(enabled = showAlertsSettings) { showAlertsSettings = false }
-    BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null }
+    BackHandler(enabled = highlightsVideoId != null) { highlightsVideoId = null; highlightsLeague = null }
     BackHandler(enabled = showGameDetail != null) { showGameDetail = null }
 
     if (showAbout) {
@@ -381,7 +387,8 @@ fun AppRoot() {
     highlightsVideoId?.let { videoId ->
         HighlightsPlayerScreen(
             videoId = videoId,
-            onBack = { highlightsVideoId = null },
+            league = highlightsLeague,
+            onBack = { highlightsVideoId = null; highlightsLeague = null },
             wifiOnlyEnabled = appSettingsViewModel.settings.wifiOnlyHighlights
         )
         return
@@ -397,7 +404,7 @@ fun AppRoot() {
             nhlWeights = nhlSettingsViewModel.weights,
             defaultTab = GameDetailTab.entries.find { it.name == appSettingsViewModel.settings.defaultGameDetailTab } ?: GameDetailTab.BREAKDOWN,
             onBack = { showGameDetail = null },
-            onWatchHighlights = { videoId -> highlightsVideoId = videoId }
+            onWatchHighlights = { videoId -> highlightsVideoId = videoId; highlightsLeague = game.league }
         )
         return
     }
@@ -482,7 +489,7 @@ fun AppRoot() {
                     nhlWeights = nhlSettingsViewModel.weights,
                     starredIds = starredGamesViewModel.starredIds,
                     onToggleStar = starredGamesViewModel::toggleStar,
-                    onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                    onWatchHighlights = { videoId, league -> highlightsVideoId = videoId; highlightsLeague = league },
                     onGameClick = { showGameDetail = it },
                     onAddTeamClick = { defaultLeagueForAddScreens = selectedLeague; showFavoriteTeams = true },
                     onAddPlayerClick = { defaultLeagueForAddScreens = selectedLeague; showFavoritePlayers = true },
@@ -518,7 +525,7 @@ fun AppRoot() {
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                             starredIds = starredGamesViewModel.starredIds,
                             onToggleStar = starredGamesViewModel::toggleStar,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            onWatchHighlights = { videoId, league -> highlightsVideoId = videoId; highlightsLeague = league },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
@@ -556,7 +563,7 @@ fun AppRoot() {
                             mlbWeights = mlbSettingsViewModel.weights,
                             nflWeights = nflSettingsViewModel.weights,
                             nhlWeights = nhlSettingsViewModel.weights,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            onWatchHighlights = { videoId, league -> highlightsVideoId = videoId; highlightsLeague = league },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
@@ -583,7 +590,7 @@ fun AppRoot() {
                             onToggleNumericScore = appSettingsViewModel::toggleShowNumericScore,
                             starredIds = starredGamesViewModel.starredIds,
                             onToggleStar = starredGamesViewModel::toggleStar,
-                            onWatchHighlights = { videoId -> highlightsVideoId = videoId },
+                            onWatchHighlights = { videoId, league -> highlightsVideoId = videoId; highlightsLeague = league },
                             favoriteTeamNames = favoritesViewModel.favoriteTeams.map { it.name }.toSet(),
                             bumpFavoriteTeamGames = appSettingsViewModel.settings.bumpFavoriteTeamGames,
                             onToggleFavoriteTeam = favoritesViewModel::toggleFavoriteTeam,
@@ -659,7 +666,7 @@ private fun GamesTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
@@ -808,7 +815,7 @@ private fun StarredTab(
     mlbWeights: MlbRubricWeights,
     nflWeights: NflRubricWeights,
     nhlWeights: NhlRubricWeights,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
@@ -880,7 +887,7 @@ private fun HistoryTab(
     onToggleNumericScore: () -> Unit,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     favoriteTeamNames: Set<String>,
     bumpFavoriteTeamGames: Boolean,
     onToggleFavoriteTeam: (com.nbawatchability.app.data.Team) -> Unit,
@@ -975,7 +982,7 @@ private fun FavoritesTab(
     nhlWeights: NhlRubricWeights,
     starredIds: Set<String>,
     onToggleStar: (com.nbawatchability.app.data.Game) -> Unit,
-    onWatchHighlights: (String) -> Unit,
+    onWatchHighlights: (String, String) -> Unit,
     onGameClick: (com.nbawatchability.app.data.Game) -> Unit,
     onAddTeamClick: () -> Unit,
     onAddPlayerClick: () -> Unit,

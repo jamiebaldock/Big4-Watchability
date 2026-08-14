@@ -109,7 +109,10 @@ fun GameCard(
     showBell: Boolean = false,
     isBelled: Boolean = false,
     onToggleBell: () -> Unit = {},
-    onWatchHighlights: (String) -> Unit = {},
+    // (videoId, league) - league lets HighlightsPlayerScreen skip straight
+    // to "Open in YouTube" for a league whose official uploads never
+    // actually embed (see that screen's own comment on NFL specifically).
+    onWatchHighlights: (String, String) -> Unit = { _, _ -> },
     // History tab only: lets James paste a YouTube link directly onto a
     // final game missing one, instead of going through Admin's own missing-
     // highlights list. Null everywhere else - the row only renders when both
@@ -342,7 +345,7 @@ fun GameCard(
                 // always-visible affordance rather than something blurred.
                 if (game.status == GameStatus.FINAL && game.youtubeVideoId != null) {
                     HighlightsRow(
-                        onClick = { onWatchHighlights(game.youtubeVideoId) },
+                        onClick = { onWatchHighlights(game.youtubeVideoId, game.league) },
                         modifier = Modifier.padding(top = 10.dp)
                     )
                 } else if (game.status == GameStatus.FINAL && game.youtubeVideoId == null &&
