@@ -12,6 +12,7 @@ struct GamesView: View {
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
     @State private var selectedHighlightsVideoId: String?
+    @State private var selectedGameForDetail: GameJson?
 
     var body: some View {
         NavigationStack {
@@ -40,6 +41,20 @@ struct GamesView: View {
                         HighlightsPlayerView(videoId: videoId, wifiOnlyEnabled: wifiOnlyHighlights)
                     }
                 }
+                .sheet(item: $selectedGameForDetail) { game in
+                    GameDetailView(
+                        game: game,
+                        nbaWeights: weightsStore.weights(for: viewModel.leagueGroup),
+                        wnbaWeights: weightsStore.weights(for: .wnba),
+                        mlbWeights: mlbWeightsStore.weights,
+                        nflWeights: nflWeightsStore.weights,
+                        nhlWeights: nhlWeightsStore.weights,
+                        onWatchHighlights: { videoId in
+                            selectedGameForDetail = nil
+                            selectedHighlightsVideoId = videoId
+                        }
+                    )
+                }
         }
     }
 
@@ -65,7 +80,9 @@ struct GamesView: View {
                 )
                 .contentShape(Rectangle())
                 .onTapGesture {
-                    if let videoId = game.yt {
+                    if game.hasBreakdown {
+                        selectedGameForDetail = game
+                    } else if let videoId = game.yt {
                         selectedHighlightsVideoId = videoId
                     }
                 }

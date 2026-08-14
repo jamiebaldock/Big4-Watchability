@@ -100,6 +100,16 @@ struct APIClient {
     func roster(leagueGroup: LeagueGroup, team: String) async throws -> RosterResponse {
         try await get("/roster?leagueGroup=\(leagueGroup.apiValue)&team=\(team)")
     }
+
+    /// GET /game-detail?eventId= - backs the tap-a-tile popup (top
+    /// performers/head-to-head/standings context). Fetched fresh every call,
+    /// never cached client-side, matching the backend's own on-demand design.
+    func gameDetail(eventId: String) async throws -> GameDetailResponse {
+        guard let encoded = eventId.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) else {
+            throw APIError.badResponse
+        }
+        return try await get("/game-detail?eventId=\(encoded)")
+    }
 }
 
 struct SeasonWindowResponse: Codable {

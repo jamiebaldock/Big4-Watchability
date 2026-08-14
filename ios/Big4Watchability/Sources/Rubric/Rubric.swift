@@ -18,6 +18,26 @@ enum WatchabilityTier: String {
         if score >= 45 { return .solid }
         return .skippable
     }
+
+    // Matches Game.kt's Tier enum labels/emoji - used by the game-detail
+    // popup's share text.
+    var label: String {
+        switch self {
+        case .instantClassic: return "INSTANT CLASSIC"
+        case .worthYourTime: return "WORTH YOUR TIME"
+        case .solid: return "SOLID"
+        case .skippable: return "SKIPPABLE"
+        }
+    }
+
+    var emoji: String {
+        switch self {
+        case .instantClassic: return "🔥"
+        case .worthYourTime: return "⭐"
+        case .solid: return "👍"
+        case .skippable: return "😴"
+        }
+    }
 }
 
 enum Rubric {

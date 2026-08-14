@@ -9,34 +9,68 @@ struct StarredView: View {
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
     @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
+    @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
+    @State private var selectedGameForDetail: GameJson?
+    @State private var selectedHighlightsVideoId: String?
 
     var body: some View {
         NavigationStack {
-            if store.games.isEmpty {
-                EmptyStateView(title: "Star a game to find it here", systemImage: "star")
-                    .navigationTitle("Starred")
-            } else {
-                List {
-                    ForEach(store.games) { game in
-                        StarredRow(
-                            game: game,
-                            showNumericScore: showNumericScore,
-                            scoreAndTier: game.effectiveScoreAndTier(
-                                nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
-                                mlb: mlbWeightsStore.weights,
-                                nfl: nflWeightsStore.weights,
-                                nhl: nhlWeightsStore.weights
+            Group {
+                if store.games.isEmpty {
+                    EmptyStateView(title: "Star a game to find it here", systemImage: "star")
+                } else {
+                    List {
+                        ForEach(store.games) { game in
+                            StarredRow(
+                                game: game,
+                                showNumericScore: showNumericScore,
+                                scoreAndTier: game.effectiveScoreAndTier(
+                                    nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
+                                    mlb: mlbWeightsStore.weights,
+                                    nfl: nflWeightsStore.weights,
+                                    nhl: nhlWeightsStore.weights
+                                )
                             )
-                        )
-                        .swipeActions {
-                            Button("Unstar", role: .destructive) {
-                                store.toggle(game)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                if game.hasBreakdown {
+                                    selectedGameForDetail = game
+                                } else if let videoId = game.yt {
+                                    selectedHighlightsVideoId = videoId
+                                }
+                            }
+                            .swipeActions {
+                                Button("Unstar", role: .destructive) {
+                                    store.toggle(game)
+                                }
                             }
                         }
                     }
+                    .listStyle(.plain)
                 }
-                .listStyle(.plain)
-                .navigationTitle("Starred")
+            }
+            .navigationTitle("Starred")
+            .fullScreenCover(isPresented: Binding(
+                get: { selectedHighlightsVideoId != nil },
+                set: { if !$0 { selectedHighlightsVideoId = nil } }
+            )) {
+                if let videoId = selectedHighlightsVideoId {
+                    HighlightsPlayerView(videoId: videoId, wifiOnlyEnabled: wifiOnlyHighlights)
+                }
+            }
+            .sheet(item: $selectedGameForDetail) { game in
+                GameDetailView(
+                    game: game,
+                    nbaWeights: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
+                    wnbaWeights: weightsStore.weights(for: .wnba),
+                    mlbWeights: mlbWeightsStore.weights,
+                    nflWeights: nflWeightsStore.weights,
+                    nhlWeights: nhlWeightsStore.weights,
+                    onWatchHighlights: { videoId in
+                        selectedGameForDetail = nil
+                        selectedHighlightsVideoId = videoId
+                    }
+                )
             }
         }
     }

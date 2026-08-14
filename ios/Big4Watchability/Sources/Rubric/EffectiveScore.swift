@@ -29,4 +29,9 @@ extension GameJson {
             return (score, WatchabilityTier.forScore(score))
         }
     }
+
+    // Gates the game-detail popup - matches Game.kt's hasBreakdown. An
+    // upcoming/live game has neither a rubric breakdown nor real
+    // top-performer stats to show yet.
+    var hasBreakdown: Bool { scoreVisible && score != nil }
 }
