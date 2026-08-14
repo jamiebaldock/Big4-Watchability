@@ -6,6 +6,7 @@ struct GamesView: View {
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
     @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
+    @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
     @ObservedObject private var starred = StarredGamesStore.shared
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
@@ -47,7 +48,8 @@ struct GamesView: View {
                     showNumericScore: showNumericScore,
                     weights: weightsStore.weights(for: viewModel.leagueGroup),
                     mlbWeights: mlbWeightsStore.weights,
-                    nflWeights: nflWeightsStore.weights
+                    nflWeights: nflWeightsStore.weights,
+                    nhlWeights: nhlWeightsStore.weights
                 )
                 .swipeActions(edge: .leading) {
                     Button {
@@ -89,6 +91,7 @@ private struct GameRow: View {
     let weights: RubricWeights
     let mlbWeights: MlbRubricWeights
     let nflWeights: NflRubricWeights
+    let nhlWeights: NhlRubricWeights
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -108,15 +111,15 @@ private struct GameRow: View {
         .padding(.vertical, 4)
     }
 
-    // NBA/WNBA/MLB/NFL get the client-side, weight-adjusted score (each
-    // sport's own tier scale - MLB's 60/35/20 and NFL's 75/54/28 aren't
-    // basketball's 85/65/45, see MlbRubric.swift/NflRubric.swift); NHL falls
-    // back to the server's fixed-1x score until its rubric is ported too.
+    // Every league now gets the client-side, weight-adjusted score - each
+    // sport's own tier scale (MLB 60/35/20, NFL 75/54/28, NHL 78/56/29)
+    // isn't basketball's 85/65/45, see the per-sport Rubric files.
     private var displayScore: Int? {
         switch game.lg {
         case .nba, .wnba: return game.effectiveScore(weights: weights)
         case .mlb: return game.effectiveMlbScore(weights: mlbWeights)
         case .nfl: return game.effectiveNflScore(weights: nflWeights)
+        case .nhl: return game.effectiveNhlScore(weights: nhlWeights)
         default: return game.score
         }
     }
@@ -126,6 +129,7 @@ private struct GameRow: View {
         case .nba, .wnba: return game.effectiveTier(weights: weights)
         case .mlb: return game.effectiveMlbTier(weights: mlbWeights)
         case .nfl: return game.effectiveNflTier(weights: nflWeights)
+        case .nhl: return game.effectiveNhlTier(weights: nhlWeights)
         default:
             guard let score = game.score else { return nil }
             return WatchabilityTier.forScore(score)

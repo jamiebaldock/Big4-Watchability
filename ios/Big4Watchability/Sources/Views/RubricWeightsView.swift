@@ -1,11 +1,13 @@
 import SwiftUI
 
-// Swift mirror of RubricWeightsScreen.kt - NBA/WNBA/MLB/NFL sliders so far
-// (NHL rubric isn't ported yet, see Rubric.swift).
+// Swift mirror of RubricWeightsScreen.kt - all 5 leagues now have sliders,
+// each sport's own weight shape (see Rubric.swift/MlbRubric.swift/
+// NflRubric.swift/NhlRubric.swift).
 struct RubricWeightsView: View {
     @ObservedObject private var store = RubricWeightsStore.shared
     @ObservedObject private var mlbStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflStore = NflRubricWeightsStore.shared
+    @ObservedObject private var nhlStore = NhlRubricWeightsStore.shared
     @State private var league: LeagueGroup = .nba
 
     var body: some View {
@@ -16,6 +18,7 @@ struct RubricWeightsView: View {
                     Text("WNBA").tag(LeagueGroup.wnba)
                     Text("MLB").tag(LeagueGroup.mlb)
                     Text("NFL").tag(LeagueGroup.nfl)
+                    Text("NHL").tag(LeagueGroup.nhl)
                 }
                 .pickerStyle(.segmented)
                 .listRowSeparator(.hidden)
@@ -23,6 +26,7 @@ struct RubricWeightsView: View {
                 switch league {
                 case .mlb: mlbSliders
                 case .nfl: nflSliders
+                case .nhl: nhlSliders
                 default: basketballSliders
                 }
 
@@ -31,15 +35,10 @@ struct RubricWeightsView: View {
                         switch league {
                         case .mlb: mlbStore.setWeights(MlbRubricWeights())
                         case .nfl: nflStore.setWeights(NflRubricWeights())
+                        case .nhl: nhlStore.setWeights(NhlRubricWeights())
                         default: store.setWeights(RubricWeights(), for: league)
                         }
                     }
-                }
-
-                Section {
-                    Text("NHL weight sliders are coming in a later build.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("Rubric Weights")
@@ -99,6 +98,24 @@ struct RubricWeightsView: View {
         }
     }
 
+    @ViewBuilder
+    private var nhlSliders: some View {
+        Section {
+            nhlWeightSlider("Margin", keyPath: \.margin)
+            nhlWeightSlider("Comeback", keyPath: \.comeback)
+            nhlWeightSlider("Lead changes", keyPath: \.leadChanges)
+            nhlWeightSlider("Overtime", keyPath: \.overtime)
+            nhlWeightSlider("Decisive late score", keyPath: \.decisiveScoreLate)
+            nhlWeightSlider("Power play goals", keyPath: \.powerPlay)
+            nhlWeightSlider("Star performance", keyPath: \.star)
+            nhlWeightSlider("Shutout", keyPath: \.shutout)
+            nhlWeightSlider("Total goals", keyPath: \.totalGoals)
+            nhlWeightSlider("Stakes", keyPath: \.stakes)
+        } footer: {
+            Text("NHL has its own independent point scale and tier cutoffs, not normalized to basketball's.")
+        }
+    }
+
     private func weightSlider(_ label: String, keyPath: WritableKeyPath<RubricWeights, Double>) -> some View {
         let binding = Binding<Double>(
             get: { store.weights(for: league)[keyPath: keyPath] },
@@ -130,6 +147,18 @@ struct RubricWeightsView: View {
                 var weights = nflStore.weights
                 weights[keyPath: keyPath] = newValue
                 nflStore.setWeights(weights)
+            }
+        )
+        return sliderRow(label, binding: binding)
+    }
+
+    private func nhlWeightSlider(_ label: String, keyPath: WritableKeyPath<NhlRubricWeights, Double>) -> some View {
+        let binding = Binding<Double>(
+            get: { nhlStore.weights[keyPath: keyPath] },
+            set: { newValue in
+                var weights = nhlStore.weights
+                weights[keyPath: keyPath] = newValue
+                nhlStore.setWeights(weights)
             }
         )
         return sliderRow(label, binding: binding)
