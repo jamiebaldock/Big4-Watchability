@@ -14,19 +14,28 @@ const WNBA_YOUTUBE_CHANNEL_ID = "UCO9a_ryN_l7DIDS-VIt-zmw";
 // branch - only the channel id differs.
 const MLB_YOUTUBE_CHANNEL_ID = "UCoLrcjPV5PbUrUyXq5mjc_A";
 // Channel id confirmed the same way as every other league above (canonical
-// externalId on youtube.com/@NFL). Title format confirmed 2026-08-07 against
-// two real live uploads: the 2026 Hall of Fame Game ("Carolina Panthers vs.
-// Arizona Cardinals | 2026 Hall of Fame Game Highlights") and a real 2025
-// regular-season game from the @NFL channel's history ("Kansas City Chiefs
-// vs Buffalo Bills Game Highlights | 2025 NFL Season Week 9"). Like
-// NHL, NFL's real titles never contain "FULL GAME HIGHLIGHTS" - they use
-// full "City Nickname" display names (not nickname-only) and the phrase
-// "Game Highlights" (no "Full"). Note the channel also posts separate
-// "FULL GAME" replay uploads with no "Highlights" in the title (e.g.
-// "Kansas City Chiefs vs. Buffalo Bills FULL GAME | NFL 2025 Season Week
-// 9") - those must NOT match, which is why "GAME HIGHLIGHTS" (not bare
-// "HIGHLIGHTS") is required below, same reasoning as every other league's
-// stricter-substring choice.
+// externalId on youtube.com/@NFL).
+//
+// Title format re-confirmed 2026-08-14 against real live 2026 preseason
+// uploads (the earlier 2026-08-07 assumption of "Game Highlights" wording,
+// based on the Hall of Fame Game and a stale 2025-season sample, turned out
+// wrong and broke matching for every NFL game all of Preseason Week 1 -
+// zero matches, James's report) - the channel's actual current format for
+// the real full-game video is just "{Away} vs. {Home} | {Year} Preseason
+// Week N" (e.g. "Detroit Lions vs. Cincinnati Bengals | 2026 Preseason Week
+// 1", 165K views, 15:02 long; "Tennessee Titans vs San Francisco 49ers |
+// 2026 Preseason Week 1", 95K views) - no "Highlights"/"Game Highlights"
+// wording anywhere. Checked directly on @NFL's channel for a same-day
+// no-highlights "FULL GAME" replay upload (the reason "GAME HIGHLIGHTS" was
+// required in the first place) and found none for this game - only the one
+// real video plus player-specific clip compilations ("Every X Target/Pass
+// from Preseason Week 1") that don't contain both team nicknames, so they're
+// already excluded by the two-nickname match below without any phrase
+// requirement doing that work. "VS" is required instead purely as a cheap
+// extra safety margin (confirmed present, with or without a trailing
+// period, in both real titles above) - regular-season title format is still
+// unconfirmed (preseason only, as of this fix), so this may need another
+// look once real regular-season uploads exist to check against.
 const NFL_YOUTUBE_CHANNEL_ID = "UCDVYQ4Zhbm3S2dlz7P1GBDg";
 // Channel id confirmed the same way as every other league above (canonical
 // externalId + <link rel="canonical"> + channelMetadataRenderer.title="NHL"
@@ -59,16 +68,14 @@ function channelIdFor(league: HighlightsLeague): string {
 // NHL's real titles never contain the literal "FULL GAME HIGHLIGHTS" phrase
 // (see NHL_YOUTUBE_CHANNEL_ID's own comment) - just "HIGHLIGHTS" alongside
 // either "NHL Highlights" or "NHL Playoff Highlights". NFL's real titles
-// (see NFL_YOUTUBE_CHANNEL_ID's own comment) also drop "FULL" but do
-// reliably contain "GAME HIGHLIGHTS", which the channel's separate
-// no-highlights "FULL GAME" replay uploads never do - using that instead of
-// bare "HIGHLIGHTS" keeps the same "Top Plays"/clip-show false-positive
-// protection every other league gets from its own stricter phrase.
-// NBA/WNBA/MLB's confirmed real titles do contain the full "FULL GAME
-// HIGHLIGHTS" phrase, so they keep requiring it.
+// (see NFL_YOUTUBE_CHANNEL_ID's own comment) don't contain "Highlights" at
+// all as of the 2026-08-14 re-check - just "VS"/"VS." between the two team
+// names, which is what's required below instead now. NBA/WNBA/MLB's
+// confirmed real titles do contain the full "FULL GAME HIGHLIGHTS" phrase,
+// so they keep requiring it.
 function requiredTitlePhraseFor(league: HighlightsLeague): string {
   if (league === "nhl") return "HIGHLIGHTS";
-  if (league === "nfl") return "GAME HIGHLIGHTS";
+  if (league === "nfl") return "VS";
   return "FULL GAME HIGHLIGHTS";
 }
 
@@ -275,20 +282,19 @@ export async function searchHighlightsVideo(
   // where the channel posts far more same-day videos than a regular-season
   // day. Querying with what the title actually contains ranks it correctly.
   // NHL's own confirmed real titles say "NHL Highlights"/"NHL Playoff
-  // Highlights", and NFL's say "Game Highlights" - neither ever says "full
-  // game highlights". Querying with that literal phrase for either would
-  // still likely surface the same video (YouTube's search ranking isn't an
-  // exact-substring match), but querying with what the title actually says
-  // is the same "don't guess, match what's real" principle every other
-  // league's query construction already follows here - and for NFL
-  // specifically, the channel's separate "FULL GAME" (no highlights) replay
-  // upload also contains "full", so leaving it in the query risked diluting
-  // relevance ranking toward the wrong video.
+  // Highlights" - "full game highlights" would still likely surface the
+  // same video (YouTube's search ranking isn't an exact-substring match),
+  // but querying with what the title actually says is the same "don't
+  // guess, match what's real" principle every other league's query
+  // construction already follows here. NFL's real titles (re-checked
+  // 2026-08-14, see NFL_YOUTUBE_CHANNEL_ID's comment) don't say "highlights"
+  // at all - "vs" is the only confirmed-real term worth querying on beyond
+  // the team names themselves.
   let query: string;
   if (league === "nhl") {
     query = `${awayNickname} ${homeNickname} NHL highlights`;
   } else if (league === "nfl") {
-    query = `${awayNickname} ${homeNickname} game highlights`;
+    query = `${awayNickname} ${homeNickname} vs`;
   } else {
     query = `${awayNickname} ${homeNickname} full game highlights`;
   }
