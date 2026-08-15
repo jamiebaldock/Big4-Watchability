@@ -577,12 +577,26 @@ interface RawHeadToHeadRow {
  * per-league season-boundary rules a second time here, since the popup's
  * job is just "how have these two played recently," not a strict season
  * split.
+ *
+ * Requires away_score/home_score to be non-null, not just status='final' -
+ * gamesService.ts's processEvent sets status='final' as soon as ESPN
+ * reports the game over, but the rubric (which sets the actual score
+ * columns, via setFinalRubric/setMlbFinalRubric/etc.) only computes
+ * demand-driven, the next time a live request touches that specific game.
+ * A game nobody's requested since finishing can sit with status='final'
+ * and null scores indefinitely, which crashed the mobile client's
+ * game-detail popup on a real head-to-head match (Dallas Wings @ Indiana
+ * Fever, 2026-08-15) - HeadToHeadGameJson's awayScore/homeScore are typed
+ * non-nullable, so kotlinx.serialization threw decoding the null. A
+ * scoreless "past meeting" has nothing useful to show here anyway, so
+ * filtering it out here is correct regardless of the client-side typing.
  */
 export function getHeadToHead(leagueGroup: LeagueGroup, teamA: string, teamB: string, excludeEventId: string, limit = 5): HeadToHeadGame[] {
   const rows = db
     .prepare(
       `SELECT event_id, tipoff_utc, away, home, away_score, home_score FROM games
        WHERE league_group=@leagueGroup AND status='final' AND event_id != @excludeEventId
+         AND away_score IS NOT NULL AND home_score IS NOT NULL
          AND ((away=@teamA AND home=@teamB) OR (away=@teamB AND home=@teamA))
        ORDER BY tipoff_utc DESC
        LIMIT @limit`
