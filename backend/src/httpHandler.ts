@@ -88,11 +88,32 @@ function isSafelyPastDate(dateYyyyMmDd: string): boolean {
  * large majority of a season's per-date work into a local file read after
  * the first time anyone (any user, any request) asks for that date.
  */
+// Short-lived in-memory cache for "live" (today/near-future) dates - the
+// safely-past cache above never expires, this one deliberately does, since
+// these dates' games are still in progress or upcoming. Added 2026-08-27
+// after ESPN started 403-blocking Render's outbound IP (BACKLOG.md P5): this
+// function is the one choke point alertsPoller.ts's fetchLiveGames shares
+// with every direct /schedule request (see this function's own doc comment
+// below), so within one TTL window a poller tick landing near a real
+// request - or several concurrent users - for the same (league, date) now
+// shares a single ESPN fetch instead of each firing its own. Doesn't fix an
+// already-triggered block (nothing server-side can undo that), only reduces
+// how much request volume risks triggering one. No eviction of expired
+// entries beyond overwriting on next fetch - deliberately not worth the
+// complexity, since the key space is naturally bounded (a handful of
+// leagues x the small live date window every caller actually requests).
+const LIVE_CACHE_TTL_MS = 20_000;
+const liveGamesCache = new Map<string, { games: GameJson[]; expiresAt: number }>();
+
 export async function getGamesForDateAnySport(date: string, leagueGroup: LeagueGroup): Promise<GameJson[]> {
   const cacheable = isSafelyPastDate(date);
   if (cacheable) {
     const cached = loadLeagueCache<GameJson[]>("scheduleDay", leagueGroup, date);
     if (cached) return cached;
+  } else {
+    const liveKey = `${leagueGroup}:${date}`;
+    const liveCached = liveGamesCache.get(liveKey);
+    if (liveCached && liveCached.expiresAt > Date.now()) return liveCached.games;
   }
 
   const games = await (isMlbLeagueGroup(leagueGroup)
@@ -103,7 +124,11 @@ export async function getGamesForDateAnySport(date: string, leagueGroup: LeagueG
         ? getNhlGamesForDate(date)
         : getGamesForDate(date, leagueGroup));
 
-  if (cacheable) saveLeagueCache("scheduleDay", leagueGroup, date, games);
+  if (cacheable) {
+    saveLeagueCache("scheduleDay", leagueGroup, date, games);
+  } else {
+    liveGamesCache.set(`${leagueGroup}:${date}`, { games, expiresAt: Date.now() + LIVE_CACHE_TTL_MS });
+  }
   return games;
 }
 
