@@ -387,5 +387,11 @@ app.listen(PORT, () => {
   // here is just to have the seed's rows exist before the poller's first
   // tick, not a correctness requirement anymore.
   applySeedHighlights().then(startHighlightsPoller);
-  startAlertsPoller();
+  // TEMPORARILY PAUSED 2026-08-27 during the ESPN rate-limit/block incident
+  // (BACKLOG.md P5) - this fires an immediate 5-league ESPN hit on every
+  // startup plus one every 3 minutes forever after, which was adding to
+  // whatever's keeping the block triggered, for zero benefit right now since
+  // no real users depend on Alerts yet. Re-enable once /schedule is
+  // confirmed healthy again for a sustained period, not just one clean check.
+  // startAlertsPoller();
 });
