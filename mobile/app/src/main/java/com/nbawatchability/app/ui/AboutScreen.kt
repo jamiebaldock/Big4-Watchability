@@ -66,8 +66,12 @@ private const val TAPS_TO_UNLOCK_SECRET = 8
 private const val CONTACT_EMAIL = "help@tech3d.com.au"
 
 // Hosted from docs/privacy-policy.html via GitHub Pages (this repo's docs/
-// folder) - verified live before wiring it in here.
-private const val PRIVACY_POLICY_URL = "https://jamiebaldock.github.io/NBA-Watchability/privacy-policy.html"
+// folder) - verified live before wiring it in here. Repo renamed
+// NBA-Watchability -> Big4-Watchability 2026-08-27 so this front-facing URL
+// (the one users can actually tap into and see) reads as the app's real
+// name rather than its old pre-rebrand one - see BACKLOG.md's Monetization
+// section for the rest of that day's naming cleanup.
+private const val PRIVACY_POLICY_URL = "https://jamiebaldock.github.io/Big4-Watchability/privacy-policy.html"
 
 /** Reached from Settings rather than the bottom nav - frees up a nav slot for Starred. */
 @OptIn(ExperimentalMaterial3Api::class)
