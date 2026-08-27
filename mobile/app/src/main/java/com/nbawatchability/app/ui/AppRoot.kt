@@ -419,7 +419,13 @@ fun AppRoot() {
     Scaffold(
         containerColor = BackgroundBase,
         bottomBar = {
-            ScrollableBottomNavBar(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+            Column {
+                // Ads pivot (BACKLOG.md Monetization section) - sits above the
+                // nav row, not below it, so it reads as part of the screen
+                // rather than crowding the tap targets beneath the system nav.
+                AdBanner()
+                ScrollableBottomNavBar(selectedTab = selectedTab, onTabSelected = { selectedTab = it })
+            }
         }
     ) { innerPadding ->
         Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {

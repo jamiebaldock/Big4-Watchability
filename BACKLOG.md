@@ -117,7 +117,9 @@ This is NBA's original `BARN_BURNER_EVENT_IDS` approach exactly - collect wide l
 
 ## Monetization (Design/Scope)
 
-### M1: Launch timing for Pro monetization
+**⚠️ Pivot, 2026-08-27 (James's call): M1–M3 below (the Pro-unlock/feature-gate plan) are superseded by M4 — ads-with-remove-ads-IAP.** Kept for history; read M4 first for the current plan.
+
+### M1: Launch timing for Pro monetization — SUPERSEDED by M4
 **Status:** Recommendation only — pricing not yet settled, nothing implemented
 **Description:** Considering a one-time "Pro" unlock: NBA stays free with full features; MLB/NFL/NHL free tier limited to Games tab only (no Standings/Stats/News/History/customization); Pro purchase unlocks full MLB/NFL/NHL access + rubric weight customization across all 4 leagues + advanced alert types (starting-soon, close-swing). WNBA excluded from monetization costing entirely (short season, low historical viewership).
 **Season overlap (reference year 2026):** NBA/NHL ~Oct–June, NFL ~Sept–Feb, MLB ~Apr–Oct/Nov. The only window all 4 leagues are simultaneously highly active is **early-to-mid October** (NBA/NHL season openers land while NFL is in full regular season and MLB is in its postseason/World Series).
@@ -134,10 +136,10 @@ This is NBA's original `BARN_BURNER_EVENT_IDS` approach exactly - collect wide l
 **Status:** Superseded 2026-07-27 — original plan assumed a single Oct 13–21 launch date; James proposed launching earlier instead (see M3). Kept here for history only.
 ~~Original Phase 7 target was "LAUNCH ~Oct 13–21, flip Pro paywall live day-of."~~ Replaced by the preseason-trial-window strategy below.
 
-### M3: Preseason trial-window launch strategy (current plan)
-**Status:** Plan only, nothing built yet. Full task list + timeline delivered as a formatted PDF — see [Big4_Pro_Launch_Playbook.pdf] (sent to James 2026-07-27), unique task names below match the PDF exactly so either of us can reference a task by name.
+### M3: Preseason trial-window launch strategy — SUPERSEDED by M4 (see below)
+**Status:** Superseded 2026-08-27 — James pivoted away from the whole Pro-unlock/feature-gate model to ads + a "Remove Ads" IAP instead (M4). Kept here for history only; nothing in this section was ever built. Full task list + timeline for the (now-superseded) plan was delivered as a formatted PDF — see [Big4_Pro_Launch_Playbook.pdf] (sent to James 2026-07-27), unique task names below match the PDF exactly so either of us can reference a task by name.
 **The pivot:** instead of launching and flipping the Pro paywall live on the same day, launch publicly during NBA preseason (~Oct 1–5, NBA's 2026-27 preseason reportedly starts Oct 5 per fan/sports-media sites, not yet NBA's own official release) while MLB's postseason and NFL's regular season are already active. Everyone gets **every Pro feature free** as a time-boxed trial from launch through NBA/NHL opening night (**Oct 20**, per James — historically the 2nd-last Tuesday of October), then the gate closes automatically on **Oct 21**, right as interest peaks and people who got hooked during the trial are prompted to buy.
-**Open question, still unresolved:** is the Play Console account personal (created after Nov 13, 2023 → mandatory 12-tester/14-day closed test applies) or an org account (exempt)? Biggest lever on whether this timeline is achievable.
+**Resolved 2026-08-27:** Play Console account ("Tech3D") confirmed **Personal account type**, created 2026 (well after the Nov 13, 2023 cutoff) → mandatory **12-tester/14-consecutive-day closed test applies**, no exemption available. This constraint carries forward to M4 below regardless of monetization model.
 
 **Phase A — Foundations (Jul 28 – Aug 10):** Tip-Off Setup (Play Console account), Merchant Bench (Payments profile — James only, banking info), Roster Check (confirm account type), Playbook Draft (backend entitlement schema), Billing Client Wiring (add Play Billing Library — none exists yet).
 
@@ -165,6 +167,27 @@ This is NBA's original `BARN_BURNER_EVENT_IDS` approach exactly - collect wide l
 - The closed-testing Beta Squad doubles as day-one reviewers/word-of-mouth seed.
 
 **Info still needed from James:** Roster Check result (account type); Merchant Bench banking details (must be entered by James — cannot be done on his behalf); Beta Squad Recruitment names (12–15 real people); ad platform account/payment setup (Google Ads / Meta Ads Manager); confirmation of NBA preseason/opening-night dates once officially published; sign-off that the trial-end messaging tone (playful, Player Hater Mode-style) is right.
+
+### M4: Ads + "Remove Ads" IAP (current plan, replaces M1–M3)
+**Status:** Banner ad wired and building on Android with Google's official TEST ad unit (2026-08-27) — everyone sees the same sample ad right now, nothing is a real monetized impression yet. "Remove Ads" purchase not started.
+**The pivot:** every league/feature stays fully free for everyone — no gating logic anywhere, no trial-window cutoff, no per-league entitlement enforcement. Revenue instead comes from an AdMob banner shown to all users, plus a single one-time "Remove Ads" IAP that flips a local flag to hide it. This drops nearly all of M1–M3's complexity: no backend entitlement schema, no server-verified route guards on MLB/NFL/NHL endpoints, no `AppRoot.kt`/`RubricWeightsScreen.kt`/`AlertsSettingsScreen` feature gates, no Trial Switch/Countdown Banner/Opening Night Cutoff machinery.
+**Why lower verification stakes than M1–M3:** the worst case of someone spoofing the "ads removed" flag is lost ad revenue from that one user, not exposed paid data — so a client-side DataStore flag (same pattern as the app's other settings) is acceptable rather than needing Google Play Developer API server-verification like the old plan required for feature access.
+
+**Built (2026-08-27):**
+- `mobile/app/build.gradle.kts` — added `com.google.android.gms:play-services-ads:23.5.0`
+- `mobile/app/src/main/AndroidManifest.xml` — added the required AdMob `APPLICATION_ID` meta-data, using Google's published **test** App ID (`ca-app-pub-3940256099942544~3347511713`)
+- `mobile/app/src/main/java/com/nbawatchability/app/ui/AdBanner.kt` — new; wraps the View-based `AdView` in `AndroidView` (AdMob has no first-party Compose primitive yet), using Google's published **test** banner ad unit ID (`ca-app-pub-3940256099942544/6300978111`), initializes `MobileAds` on first composition
+- `mobile/app/src/main/java/com/nbawatchability/app/ui/AppRoot.kt` — `AdBanner()` placed inside the Scaffold's `bottomBar` slot, stacked above `ScrollableBottomNavBar` (the tab row), so it shows on every tab consistently, positioned above rather than below the nav row
+- Debug APK rebuilt and synced to `Big4Watchability Phone App/Big4Watchability-app-debug.apk` for on-device test
+
+**Still open:**
+0. ✅ `play-store/privacy-policy.txt` and `play-store/store-listing.txt` updated 2026-08-27 for accuracy (added AdMob + Firebase Cloud Messaging disclosure, dropped the now-false "No ads/No tracking" claims). Hosting also done the same day: `backend/src/privacyPolicyPage.ts` (new) is served at `GET /privacy-policy` by `devServer.ts`, verified 200 OK locally — will be live at **https://nba-watchability.onrender.com/privacy-policy** once this commit is pushed and Render redeploys (not yet pushed as of this entry). Kept as a hand-synced HTML copy of the .txt source since the backend deploy doesn't include files outside `backend/` — update both together when the policy changes.
+1. Swap the test App ID/ad unit ID for real ones once James registers the app in an AdMob account (needs its own Google account setup, separate from Play Console).
+2. GDPR consent: Google's User Messaging Platform (UMP) SDK needs wiring before EU users can be served personalized ads — not yet added.
+3. Decide on ad placement beyond the one banner (interstitials? none at all?) and whether banner-only is the final call.
+4. Build the "Remove Ads" IAP: single non-consumable Play Billing product, purchase flow, Restore Purchase, and the DataStore flag that suppresses `AdBanner` once set.
+5. Play Console Data Safety section needs updating to disclose ad usage; content rating may need revisiting.
+6. Closed-testing requirement (12-tester/14-day) confirmed to apply (2026-08-27: account is Personal type) — unaffected by this pivot, it's a publishing rule not a monetization-model consequence. **Beta Squad Recruitment (12–15 real opt-in testers) is now the biggest schedule risk in the whole plan** — worth starting as soon as an app listing exists, since the 14-day clock only starts once testers actually opt in.
 
 ---
 

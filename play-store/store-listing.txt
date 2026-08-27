@@ -1,0 +1,40 @@
+Big4 Watchability — Play Store Listing Copy
+
+
+SHORT DESCRIPTION (max 80 characters — currently 78)
+------------------------------------------------------
+Spoiler-free NBA, MLB, NFL & NHL watchability scores — know what's worth it.
+
+
+FULL DESCRIPTION (max 4000 characters — currently ~1500)
+------------------------------------------------------
+Big4 Watchability tells you which games are actually worth watching — without spoiling anything.
+
+Every NBA, WNBA, MLB, NFL, and NHL game gets a Watchability Score once it's final, based on what actually makes a game exciting: close margins, big comebacks, lead changes, clutch finishes, buzzer-beaters, overtime, and standout individual performances. The score and every dramatic detail stay hidden until you're ready — no accidental score-checking, no spoiled finishes.
+
+SPOILER-FREE BY DESIGN
+- Scores and outcomes are hidden until a game is final (or deep in the closing stages).
+- A short, pregame-style preview blurb is generated for every upcoming game — matchup context and storylines, never a hint at how it turns out.
+- Once a game ends, tap to reveal a full breakdown: margin, comebacks, lead changes, and more — still never the actual score or winner unless you choose to see it.
+
+BROWSE YOUR WAY
+- Swipe through a full week of games, past and future, for any of the five leagues.
+- Pull to refresh live scores and game state as they happen.
+- Sort games best-first once you're ready to see ratings.
+
+FIVE LEAGUES, ONE APP
+Switch between NBA, WNBA, MLB, NFL, and NHL in a tap. NBA Summer League games are included automatically during the offseason.
+
+MAKE THE RATING YOURS
+Tune how much each factor — margin, comebacks, clutch finishes, overtime, star performances, and more — contributes to a game's score, right from Settings, per league. Reset to the default anytime.
+
+No accounts, no sign-up. Just a fast way to find out which games are worth your time. Supported by a small banner ad — a one-time "Remove Ads" purchase is available for anyone who'd rather not see it.
+
+
+NOTES
+------------------------------------------------------
+- Both descriptions are ready to paste directly into Play Console's
+  store listing fields.
+- Character counts above are max limits enforced by Play Console at
+  save time — recheck actual length if you edit the text.
+- Category suggestion: Sports.

@@ -108,6 +108,12 @@ dependencies {
     // rescheduling (network-constrained, retrying) runs on WorkManager.
     implementation("androidx.work:work-runtime-ktx:2.9.1")
 
+    // Monetization pivot (ads + "Remove Ads" IAP, replacing the shelved Pro-
+    // unlock plan - see BACKLOG.md's Monetization section). AdBanner.kt wraps
+    // the View-based AdView in AndroidView since AdMob has no first-party
+    // Compose primitive yet.
+    implementation("com.google.android.gms:play-services-ads:23.5.0")
+
     debugImplementation("androidx.compose.ui:ui-tooling")
 
     // Favorites->Schedule league-flash stall (see memory

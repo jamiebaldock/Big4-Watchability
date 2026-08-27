@@ -33,6 +33,7 @@ import { startHighlightsPoller } from "./highlightsPoller";
 import { startAlertsPoller } from "./alertsPoller";
 import { applySeedHighlights } from "./highlightsSeed";
 import { migrateHistoricalBackfill } from "./migrateToGameStore";
+import { PRIVACY_POLICY_HTML } from "./privacyPolicyPage";
 
 const app = express();
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
@@ -40,6 +41,15 @@ const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 // Free bandwidth win: gzips every response - JSON compresses very well, so
 // this cuts egress substantially with zero feature/behavior change.
 app.use(compression());
+
+// Play Console's store listing requires a live, public URL for the privacy
+// policy - this exists so that URL is https://nba-watchability.onrender.com
+// /privacy-policy rather than an unhosted repo file. See
+// backend/src/privacyPolicyPage.ts's own comment for how it's kept in sync
+// with play-store/privacy-policy.txt (the plain-text source draft).
+app.get("/privacy-policy", (_req, res) => {
+  res.type("html").send(PRIVACY_POLICY_HTML);
+});
 
 app.get("/schedule", async (req, res) => {
   try {

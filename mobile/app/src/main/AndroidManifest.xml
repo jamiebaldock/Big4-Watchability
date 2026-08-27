@@ -26,6 +26,15 @@
         android:theme="@android:style/Theme.Material.NoActionBar"
         android:supportsRtl="true">
 
+        <!-- AdMob requires this at manifest level or the SDK throws on init.
+             This is Google's own published TEST app ID (safe to ship in a
+             debug build, shows only sample ads) - swap for the app's real
+             AdMob App ID once James has registered the app in an AdMob
+             account. See BACKLOG.md's Monetization section. -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
