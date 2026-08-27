@@ -1,3 +1,5 @@
+import { fetchEspnJson } from "./espnFetch";
+
 // Thin client for ESPN's public (keyless) NHL endpoints - mirrors
 // nflEspnClient.ts's/mlbEspnClient.ts's role for their own sports. A separate
 // file from espnClient.ts (basketball) since hockey's box score shape
@@ -124,11 +126,7 @@ export interface EspnNhlSummary {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`ESPN NHL request failed: ${res.status} ${res.statusText} (${url})`);
-  }
-  return (await res.json()) as T;
+  return fetchEspnJson<T>(url, "NHL");
 }
 
 /** dateYyyymmdd must be in YYYYMMDD form, matching espnClient.ts's fetchScoreboard. */

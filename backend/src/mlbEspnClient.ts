@@ -1,3 +1,5 @@
+import { fetchEspnJson } from "./espnFetch";
+
 // Thin client for ESPN's public (keyless) MLB endpoints - mirrors
 // soccerEspnClient.ts's role for baseball. A separate file from
 // espnClient.ts (basketball) since MLB's box score shape genuinely differs
@@ -107,11 +109,7 @@ export interface EspnMlbSummary {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`ESPN MLB request failed: ${res.status} ${res.statusText} (${url})`);
-  }
-  return (await res.json()) as T;
+  return fetchEspnJson<T>(url, "MLB");
 }
 
 /** dateYyyymmdd must be in YYYYMMDD form, matching espnClient.ts's fetchScoreboard. */

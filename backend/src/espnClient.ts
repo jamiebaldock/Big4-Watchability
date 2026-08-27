@@ -1,3 +1,5 @@
+import { fetchEspnJson } from "./espnFetch";
+
 // Thin client for ESPN's public (keyless) NBA endpoints. Unofficial but widely
 // used for exactly this kind of hobby project; named as an example source in
 // docs/nba-watchability-spec.md section 2 point 12.
@@ -109,11 +111,7 @@ export interface EspnSummary {
 }
 
 async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url);
-  if (!res.ok) {
-    throw new Error(`ESPN request failed: ${res.status} ${res.statusText} (${url})`);
-  }
-  return (await res.json()) as T;
+  return fetchEspnJson<T>(url);
 }
 
 interface EspnTeamScheduleLogo {
