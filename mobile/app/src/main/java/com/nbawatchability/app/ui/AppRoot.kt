@@ -1,16 +1,20 @@
 package com.nbawatchability.app.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -418,8 +422,22 @@ fun AppRoot() {
     ) {
     Scaffold(
         containerColor = BackgroundBase,
+        // Every content branch below renders its own inner Scaffold whose
+        // TopAppBar already consumes the status-bar inset, and the bottomBar
+        // here consumes the nav-bar inset itself - so this outer Scaffold must
+        // contribute zero, otherwise (under targetSdk 35 edge-to-edge) the
+        // status-bar inset gets counted twice and leaves a big gap up top.
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
-            Column {
+            // targetSdk 35 forces edge-to-edge, so the bottomBar slot now draws
+            // behind the gesture/nav bar - navigationBarsPadding lifts the ad +
+            // nav row above it, and the background fills the inset so the bar
+            // colour still bleeds to the screen edge rather than showing a gap.
+            Column(
+                Modifier
+                    .background(SurfaceCardElevated)
+                    .navigationBarsPadding()
+            ) {
                 // Ads pivot (BACKLOG.md Monetization section) - sits above the
                 // nav row, not below it, so it reads as part of the screen
                 // rather than crowding the tap targets beneath the system nav.
@@ -428,7 +446,10 @@ fun AppRoot() {
             }
         }
     ) { innerPadding ->
-        Box(modifier = Modifier.fillMaxSize().padding(innerPadding)) {
+        // consumeWindowInsets so the inner per-tab Scaffolds don't re-add the
+        // bottom nav-bar inset on top of the space this outer bottomBar already
+        // reserves (another edge-to-edge double-count, this one at the bottom).
+        Box(modifier = Modifier.fillMaxSize().padding(innerPadding).consumeWindowInsets(innerPadding)) {
             // pendingJumpLeague wins over the persisted setting while a deep
             // link is still being applied - see its own declaration above
             // for why (avoids a multi-second flash of the previously-viewed

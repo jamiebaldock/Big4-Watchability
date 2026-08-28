@@ -1,15 +1,21 @@
 package com.nbawatchability.app.ui
 
+import android.util.Log
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import com.google.android.gms.ads.AdListener
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.google.android.gms.ads.LoadAdError
 import com.google.android.gms.ads.MobileAds
 import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 
@@ -19,6 +25,12 @@ import com.nbawatchability.app.ui.theme.SurfaceCardElevated
 // account (see BACKLOG.md's Monetization section) - using the test ID against
 // a live AdMob account risks the account getting flagged for invalid traffic.
 private const val TEST_BANNER_AD_UNIT_ID = "ca-app-pub-3940256099942544/6300978111"
+
+// AdSize.BANNER is 320x50 - reserve its height unconditionally so the row keeps
+// a stable size whether or not an ad has filled yet. Without this the AdView
+// reports 0 height until its first fill, which (under a wrap-content parent)
+// collapses the banner entirely and shifts layout when it finally loads.
+private val BANNER_HEIGHT = 50.dp
 
 /**
  * Anchored banner ad, pinned above [ScrollableBottomNavBar] inside the same
@@ -37,15 +49,25 @@ fun AdBanner(modifier: Modifier = Modifier) {
     remember(context) { MobileAds.initialize(context) }
 
     Surface(color = SurfaceCardElevated) {
-        AndroidView(
-            modifier = modifier.fillMaxWidth(),
-            factory = { ctx ->
-                AdView(ctx).apply {
-                    setAdSize(AdSize.BANNER)
-                    adUnitId = TEST_BANNER_AD_UNIT_ID
-                    loadAd(AdRequest.Builder().build())
+        Box(modifier = modifier.fillMaxWidth().height(BANNER_HEIGHT)) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().height(BANNER_HEIGHT),
+                factory = { ctx ->
+                    AdView(ctx).apply {
+                        setAdSize(AdSize.BANNER)
+                        adUnitId = TEST_BANNER_AD_UNIT_ID
+                        adListener = object : AdListener() {
+                            override fun onAdLoaded() {
+                                Log.d("AdBanner", "ad loaded")
+                            }
+                            override fun onAdFailedToLoad(error: LoadAdError) {
+                                Log.w("AdBanner", "ad failed to load: ${error.code} ${error.message}")
+                            }
+                        }
+                        loadAd(AdRequest.Builder().build())
+                    }
                 }
-            }
-        )
+            )
+        }
     }
 }
