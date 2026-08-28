@@ -72,13 +72,32 @@ interface LeagueEvent {
  * needs a lightweight per-day count, not the full processed GameJson list.
  */
 export async function fetchAllEvents(espnDate: string, leagueGroup: BasketballLeagueGroup): Promise<LeagueEvent[]> {
-  const perLeague = await Promise.all(
-    LEAGUE_GROUPS[leagueGroup].map(async (league) => {
+  const leagues = LEAGUE_GROUPS[leagueGroup];
+  const perLeague = await Promise.allSettled(
+    leagues.map(async (league) => {
       const events = await fetchScoreboard(espnDate, league);
       return events.map((event): LeagueEvent => ({ league, event }));
     })
   );
-  return perLeague.flat();
+
+  // One league's ESPN fetch failing (a transient 403/block on a single sport
+  // endpoint - see BACKLOG.md P5) shouldn't blank out the whole slate: keep
+  // every league that did resolve. Only if *every* league failed do we treat
+  // it as a real outage and surface the error rather than a misleading empty day.
+  perLeague.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`fetchAllEvents: ${leagues[i]} scoreboard failed for ${espnDate}:`, r.reason);
+    }
+  });
+
+  const fulfilled = perLeague.filter(
+    (r): r is PromiseFulfilledResult<LeagueEvent[]> => r.status === "fulfilled"
+  );
+  if (fulfilled.length === 0) {
+    throw (perLeague[0] as PromiseRejectedResult).reason;
+  }
+
+  return fulfilled.flatMap((r) => r.value);
 }
 
 /** Plain, spoiler-free placeholder shown on the tile until the real pregame preview generates. */
