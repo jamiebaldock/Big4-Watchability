@@ -1,0 +1,24 @@
+**App Name:** Big4 Watchability
+
+**App Category:** Sports
+
+**What it does:** Rates every NBA, WNBA, MLB, NFL and NHL game on how watchable it is — close finish, star power, stakes, overtime — so you can pick what to watch on replay without seeing a single score or spoiler. No account required.
+
+**Testing Goals:**
+
+* Confirm the app installs and runs on a range of devices / Android versions
+* General UX feedback: is the ratings system clear, is anything confusing
+* Report any crashes, layout issues, or slow screens
+* Sanity-check the bottom banner ad renders correctly (placeholder test ads for now)
+
+**How to join (takes 2 minutes):**
+
+1. Join the group: https://groups.google.com/g/big4-watchability-testers
+2. Opt in here: https://play.google.com/apps/testing/com.nbawatchability.app
+3. Install "Big4 Watchability" from the Play Store link on that page
+
+**Requirements:** Android 8.0 (API 26) or newer. Phones and tablets.
+
+**Testing period:** 14 days minimum (Google's closed-testing requirement), longer welcome.
+
+**Reciprocity:** Yes — drop your testing link and I'll join yours too. Happy to give detailed feedback in return.
