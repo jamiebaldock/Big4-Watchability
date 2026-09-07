@@ -11,7 +11,7 @@
 // discoveries - they weren't found via the natural wait-and-search process
 // at all, and doing so would badly skew future scheduling.
 import { BasketballLeagueGroup, getGamesForDate } from "./gamesService";
-import { setHighlightsFromSeed } from "./gameStore";
+import { getGame, setHighlightsFromSeed } from "./gameStore";
 import { getMlbGamesForDate } from "./mlbGamesService";
 
 type SeedLeagueGroup = BasketballLeagueGroup | "mlb";
@@ -49,6 +49,41 @@ const SEED_ENTRIES: SeedEntry[] = [
 
   // MLB
   { date: "2026-07-19", leagueGroup: "mlb", eventId: "401816184", videoId: "5Nb08y6UgLA" }, // St. Louis Cardinals at Arizona Diamondbacks (F/10)
+
+  // MLB 2025 History-tab backfill (added 2026-09-08). The rated 2025-season
+  // games surfacing on the History tab had no highlights link, because MLB's
+  // automated highlights search is built but not wired in (mlbGamesService.ts).
+  // Video IDs found by search and each verified against the game's ESPN event
+  // data (teams + final score + local game date). Dates below are the local
+  // (US) game date - how ESPN's scoreboard buckets the event and how the MLB
+  // channel titles its upload - which for several night games is one day
+  // earlier than the UTC date gameStore holds them under.
+  { date: "2025-04-04", leagueGroup: "mlb", eventId: "401695020", videoId: "u6q_TYuw0qU" }, // Seattle Mariners at San Francisco Giants
+  { date: "2025-04-18", leagueGroup: "mlb", eventId: "401695202", videoId: "Za4smeV-CJ8" }, // Arizona Diamondbacks at Chicago Cubs
+  { date: "2025-04-22", leagueGroup: "mlb", eventId: "401695255", videoId: "zn_KjpuEWuI" }, // Los Angeles Dodgers at Chicago Cubs
+  { date: "2025-04-27", leagueGroup: "mlb", eventId: "401695316", videoId: "b1kzFE0Afu0" }, // New York Mets at Washington Nationals
+  { date: "2025-04-30", leagueGroup: "mlb", eventId: "401695353", videoId: "NA47LLD64Us" }, // Boston Red Sox at Toronto Blue Jays
+  { date: "2025-05-05", leagueGroup: "mlb", eventId: "401764534", videoId: "QZifqTAzfY8" }, // Seattle Mariners at Athletics
+  { date: "2025-05-13", leagueGroup: "mlb", eventId: "401695528", videoId: "R8nbQkNiNKE" }, // Boston Red Sox at Detroit Tigers
+  { date: "2025-05-17", leagueGroup: "mlb", eventId: "401695578", videoId: "uVjDvhB0EJ0" }, // Atlanta Braves at Boston Red Sox
+  { date: "2025-05-22", leagueGroup: "mlb", eventId: "401695654", videoId: "uOdjdcaas5s" }, // San Diego Padres at Toronto Blue Jays
+  { date: "2025-05-23", leagueGroup: "mlb", eventId: "401695663", videoId: "rq4zu_AOG3c" }, // Milwaukee Brewers at Pittsburgh Pirates
+  { date: "2025-05-28", leagueGroup: "mlb", eventId: "401695736", videoId: "ZhSWLfJvrPg" }, // Boston Red Sox at Milwaukee Brewers
+  { date: "2025-05-31", leagueGroup: "mlb", eventId: "401695776", videoId: "MuwK2VI4M0g" }, // Minnesota Twins at Seattle Mariners
+  { date: "2025-06-21", leagueGroup: "mlb", eventId: "401696053", videoId: "kvONO06-Dws" }, // Cincinnati Reds at St. Louis Cardinals
+  { date: "2025-07-10", leagueGroup: "mlb", eventId: "401696305", videoId: "cdysB9m1seo" }, // Seattle Mariners at New York Yankees
+  { date: "2025-07-18", leagueGroup: "mlb", eventId: "401696363", videoId: "wozHtA4_7ZM" }, // Kansas City Royals at Miami Marlins
+  { date: "2025-08-01", leagueGroup: "mlb", eventId: "401696553", videoId: "m1zhoyyeFL0" }, // New York Yankees at Miami Marlins
+  { date: "2025-08-01", leagueGroup: "mlb", eventId: "401696556", videoId: "MA84Qcx-VvQ" }, // Pittsburgh Pirates at Colorado Rockies (17-16)
+  { date: "2025-08-10", leagueGroup: "mlb", eventId: "401696676", videoId: "8k4LyJPqP-g" }, // New York Mets at Milwaukee Brewers
+  { date: "2025-08-11", leagueGroup: "mlb", eventId: "401696685", videoId: "1raOQSofDis" }, // Arizona Diamondbacks at Texas Rangers
+  { date: "2025-08-19", leagueGroup: "mlb", eventId: "401696789", videoId: "adRLXdX8FQI" }, // Chicago White Sox at Atlanta Braves
+  { date: "2025-08-27", leagueGroup: "mlb", eventId: "401696900", videoId: "eGdWy1HLs-g" }, // Minnesota Twins at Toronto Blue Jays
+  { date: "2025-09-01", leagueGroup: "mlb", eventId: "401696972", videoId: "rPyhBPpMGAA" }, // Atlanta Braves at Chicago Cubs
+  { date: "2025-09-12", leagueGroup: "mlb", eventId: "401697117", videoId: "o0vjVaE5XeE" }, // Arizona Diamondbacks at Minnesota Twins
+  { date: "2025-09-13", leagueGroup: "mlb", eventId: "401697133", videoId: "JNa1SaML-5U" }, // St. Louis Cardinals at Milwaukee Brewers
+  { date: "2025-09-28", leagueGroup: "mlb", eventId: "401697330", videoId: "CowYwD0xVCI" }, // Texas Rangers at Cleveland Guardians
+  { date: "2025-10-27", leagueGroup: "mlb", eventId: "401809299", videoId: "kipXGXpfZ2E" }, // Toronto Blue Jays at Los Angeles Dodgers (World Series Game 3, 18 innings)
 ];
 
 export async function applySeedHighlights(): Promise<void> {
@@ -66,10 +101,17 @@ export async function applySeedHighlights(): Promise<void> {
       // then layers the confirmed video ID on top. MLB dispatches to its own
       // fetcher (mlbGamesService.ts) the same way gamesService.ts's own
       // sport-dispatch elsewhere does - not a BasketballLeagueGroup value.
-      if (leagueGroup === "mlb") {
-        await getMlbGamesForDate(date);
-      } else {
-        await getGamesForDate(date, leagueGroup);
+      // Skip the schedule fetch (one ESPN round-trip per date, plus a
+      // processEvent pass per game) when every seed row for this date is
+      // already in the store - a finished game that graduated into gameStore
+      // long ago just needs the yt_video_id layered on. This keeps a large
+      // historical backfill from re-fetching dozens of old slates on boot.
+      if (entries.some((e) => !getGame(e.eventId))) {
+        if (leagueGroup === "mlb") {
+          await getMlbGamesForDate(date);
+        } else {
+          await getGamesForDate(date, leagueGroup);
+        }
       }
       for (const entry of entries) setHighlightsFromSeed(entry.eventId, entry.videoId);
     } catch (err) {
