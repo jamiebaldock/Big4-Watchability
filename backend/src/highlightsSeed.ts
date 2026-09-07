@@ -84,6 +84,47 @@ const SEED_ENTRIES: SeedEntry[] = [
   { date: "2025-09-13", leagueGroup: "mlb", eventId: "401697133", videoId: "JNa1SaML-5U" }, // St. Louis Cardinals at Milwaukee Brewers
   { date: "2025-09-28", leagueGroup: "mlb", eventId: "401697330", videoId: "CowYwD0xVCI" }, // Texas Rangers at Cleveland Guardians
   { date: "2025-10-27", leagueGroup: "mlb", eventId: "401809299", videoId: "kipXGXpfZ2E" }, // Toronto Blue Jays at Los Angeles Dodgers (World Series Game 3, 18 innings)
+
+  // MLB 2024 History-tab backfill (added 2026-09-08). Same as the 2025 block
+  // above - found by search, verified against each game's ESPN event data,
+  // dated by local (US) game date. One rated 2024 game is deliberately not
+  // seeded: Royals at Tigers 2024-08-03 (401570131 - no official MLB-channel
+  // upload found).
+  { date: "2024-04-06", leagueGroup: "mlb", eventId: "401568584", videoId: "ACN6_fiKmdI" }, // Arizona Diamondbacks at Atlanta Braves
+  { date: "2024-04-08", leagueGroup: "mlb", eventId: "401568616", videoId: "eTBWF8GHXbI" }, // Chicago Cubs at San Diego Padres
+  { date: "2024-04-10", leagueGroup: "mlb", eventId: "401568644", videoId: "SNlqqjYcna0" }, // Chicago White Sox at Cleveland Guardians
+  { date: "2024-04-14", leagueGroup: "mlb", eventId: "401568701", videoId: "9JLSmsrpxIo" }, // New York Yankees at Cleveland Guardians
+  { date: "2024-04-16", leagueGroup: "mlb", eventId: "401568723", videoId: "VNieypNAa34" }, // Los Angeles Angels at Tampa Bay Rays
+  { date: "2024-04-16", leagueGroup: "mlb", eventId: "401568725", videoId: "oVqZnkQLXHY" }, // Chicago Cubs at Arizona Diamondbacks
+  { date: "2024-04-25", leagueGroup: "mlb", eventId: "401568851", videoId: "aF-3YwImOeU" }, // San Diego Padres at Colorado Rockies
+  { date: "2024-04-26", leagueGroup: "mlb", eventId: "401568861", videoId: "ftSzo6pMNcE" }, // New York Yankees at Milwaukee Brewers
+  { date: "2024-04-27", leagueGroup: "mlb", eventId: "401568881", videoId: "6h_2ZDoNn4c" }, // Tampa Bay Rays at Chicago White Sox
+  { date: "2024-04-30", leagueGroup: "mlb", eventId: "401568914", videoId: "HpPJwEH7THU" }, // Colorado Rockies at Miami Marlins
+  { date: "2024-04-30", leagueGroup: "mlb", eventId: "401568913", videoId: "TcroXD0kEMY" }, // Cleveland Guardians at Houston Astros
+  { date: "2024-05-02", leagueGroup: "mlb", eventId: "401568940", videoId: "NB9_a2aQbT8" }, // Chicago Cubs at New York Mets
+  { date: "2024-05-18", leagueGroup: "mlb", eventId: "401569157", videoId: "8qyLGEeOtok" }, // New York Mets at Miami Marlins
+  { date: "2024-05-21", leagueGroup: "mlb", eventId: "401569203", videoId: "WesQ2NgDBnQ" }, // San Francisco Giants at Pittsburgh Pirates
+  { date: "2024-05-21", leagueGroup: "mlb", eventId: "401569190", videoId: "FBLr3GRf5DE" }, // Los Angeles Angels at Houston Astros
+  { date: "2024-05-23", leagueGroup: "mlb", eventId: "401569222", videoId: "v2UPN_ahP20" }, // Colorado Rockies at Oakland Athletics
+  { date: "2024-05-30", leagueGroup: "mlb", eventId: "401569320", videoId: "oYpt6fP8XXA" }, // Oakland Athletics at Tampa Bay Rays
+  { date: "2024-06-07", leagueGroup: "mlb", eventId: "401569426", videoId: "o4FgorFtlNY" }, // Seattle Mariners at Kansas City Royals
+  { date: "2024-06-14", leagueGroup: "mlb", eventId: "401569515", videoId: "YIGFqJXBJaI" }, // Oakland Athletics at Minnesota Twins
+  { date: "2024-06-18", leagueGroup: "mlb", eventId: "401569574", videoId: "TCI_4uHDhqI" }, // St. Louis Cardinals at Miami Marlins
+  { date: "2024-07-01", leagueGroup: "mlb", eventId: "401569739", videoId: "kCl2jJRHjzU" }, // Milwaukee Brewers at Colorado Rockies
+  { date: "2024-07-12", leagueGroup: "mlb", eventId: "401569891", videoId: "cAP05nMcFY4" }, // Seattle Mariners at Los Angeles Angels
+  { date: "2024-07-13", leagueGroup: "mlb", eventId: "401569900", videoId: "epw3tqVO2Dc" }, // Los Angeles Dodgers at Detroit Tigers
+  { date: "2024-07-20", leagueGroup: "mlb", eventId: "401569942", videoId: "b4h9tGLduYo" }, // Boston Red Sox at Los Angeles Dodgers
+  { date: "2024-07-22", leagueGroup: "mlb", eventId: "401569971", videoId: "SX93y_L5D9k" }, // Boston Red Sox at Colorado Rockies
+  { date: "2024-07-29", leagueGroup: "mlb", eventId: "401570076", videoId: "7LnBbaCkgiY" }, // Washington Nationals at Arizona Diamondbacks
+  { date: "2024-07-30", leagueGroup: "mlb", eventId: "401570082", videoId: "mZCzQB5T1CM" }, // Los Angeles Dodgers at San Diego Padres
+  { date: "2024-08-11", leagueGroup: "mlb", eventId: "401570235", videoId: "l9H9ZxtUDuo" }, // Atlanta Braves at Colorado Rockies
+  { date: "2024-08-12", leagueGroup: "mlb", eventId: "401570248", videoId: "nwIMpHODfSA" }, // Chicago Cubs at Cleveland Guardians
+  { date: "2024-08-18", leagueGroup: "mlb", eventId: "401570324", videoId: "huBihyxr8YI" }, // Arizona Diamondbacks at Tampa Bay Rays
+  { date: "2024-08-18", leagueGroup: "mlb", eventId: "401570332", videoId: "tPVt-QdvM8k" }, // Minnesota Twins at Texas Rangers
+  { date: "2024-08-29", leagueGroup: "mlb", eventId: "401570480", videoId: "k_N4SU-8ND0" }, // Oakland Athletics at Cincinnati Reds
+  { date: "2024-09-15", leagueGroup: "mlb", eventId: "401570707", videoId: "gOxheWWqDZ0" }, // Milwaukee Brewers at Arizona Diamondbacks
+  { date: "2024-09-22", leagueGroup: "mlb", eventId: "401570797", videoId: "diNFGRRIBCk" }, // Arizona Diamondbacks at Milwaukee Brewers
+  { date: "2024-10-06", leagueGroup: "mlb", eventId: "401701018", videoId: "XQgxPKNmA6Y" }, // New York Mets at Philadelphia Phillies (NLDS Game 2)
 ];
 
 export async function applySeedHighlights(): Promise<void> {
