@@ -27,13 +27,11 @@
         android:supportsRtl="true">
 
         <!-- AdMob requires this at manifest level or the SDK throws on init.
-             This is Google's own published TEST app ID (safe to ship in a
-             debug build, shows only sample ads) - swap for the app's real
-             AdMob App ID once James has registered the app in an AdMob
-             account. See BACKLOG.md's Monetization section. -->
+             Real AdMob App ID for the app's own AdMob account (registered
+             2026-09-16). See BACKLOG.md's Monetization section. -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="ca-app-pub-6295039345620062~3445511248" />
 
         <activity
             android:name=".MainActivity"

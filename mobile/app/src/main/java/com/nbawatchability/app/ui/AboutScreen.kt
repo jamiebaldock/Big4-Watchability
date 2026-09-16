@@ -1,5 +1,6 @@
 package com.nbawatchability.app.ui
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.animation.AnimatedVisibility
@@ -49,6 +50,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.nbawatchability.app.BuildConfig
+import com.nbawatchability.app.ads.ConsentManager
 import com.nbawatchability.app.data.Tier
 import com.nbawatchability.app.ui.theme.BackgroundBase
 import com.nbawatchability.app.ui.theme.TextMuted
@@ -254,6 +256,19 @@ fun AboutScreen(onBack: () -> Unit, onSecretUnlocked: () -> Unit) {
                 label = "Privacy policy",
                 onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))) }
             )
+
+            // Only shown where Google's UMP flow determined it's actually
+            // required (EEA/UK-style regions) - most users never had a
+            // consent form shown in the first place, so there's nothing for
+            // them to revisit. See ConsentManager.kt.
+            if (ConsentManager.isPrivacyOptionsRequired(context)) {
+                HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
+                AboutLinkRow(
+                    icon = Icons.AutoMirrored.Filled.OpenInNew,
+                    label = "Ad privacy options",
+                    onClick = { (context as? Activity)?.let { ConsentManager.showPrivacyOptionsForm(it) } }
+                )
+            }
 
             HorizontalDivider(color = TextMuted.copy(alpha = 0.3f))
 

@@ -24,8 +24,8 @@ android {
         applicationId = "com.nbawatchability.app"
         minSdk = 26
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.1.1"
+        versionCode = 4
+        versionName = "0.1.2"
     }
 
     signingConfigs {
@@ -113,6 +113,10 @@ dependencies {
     // the View-based AdView in AndroidView since AdMob has no first-party
     // Compose primitive yet.
     implementation("com.google.android.gms:play-services-ads:23.5.0")
+
+    // GDPR/UK consent flow required by Google's own AdMob policy before
+    // loading ads for a real (non-test) ad unit - see ConsentManager.kt.
+    implementation("com.google.android.ump:user-messaging-platform:4.0.0")
 
     debugImplementation("androidx.compose.ui:ui-tooling")
 
