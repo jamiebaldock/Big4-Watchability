@@ -16,6 +16,8 @@ targets:
       - path: Big4Watchability/Resources
         excludes:
           - "Info.plist"
+          - "Assets.xcassets/**"
+      - path: Big4Watchability/Resources/Assets.xcassets
     info:
       path: Big4Watchability/Resources/Info.plist
     settings:
