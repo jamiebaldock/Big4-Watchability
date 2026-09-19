@@ -34,14 +34,21 @@ jobs:
       # byte-for-byte IDENTICAL archived Info.plist (same "1"/"1.0" values,
       # same missing keys) - meaning our source edits may not even be
       # reaching the generated project. Check that BEFORE building again.
+      # Using wc/md5 markers instead of eyeballing line numbers in the log,
+      # since a scrolled screenshot of raw `cat` output is easy to miscount.
       - name: Verify generated project (debug)
         run: |
-          echo "--- Source Info.plist as checked out ---"
+          echo "=== SOURCE PLIST START ==="
           cat Big4Watchability/Resources/Info.plist
-          echo "--- project.pbxproj INFOPLIST_FILE / GENERATE_INFOPLIST_FILE lines ---"
+          echo "=== SOURCE PLIST END (lines: $(wc -l < Big4Watchability/Resources/Info.plist), md5: $(md5 -q Big4Watchability/Resources/Info.plist)) ==="
+          echo "=== Any OTHER file named Info.plist anywhere in the checkout ==="
+          find . -iname "Info.plist"
+          echo "=== pbxproj INFOPLIST_FILE / GENERATE_INFOPLIST_FILE / version lines ==="
           grep -n "INFOPLIST_FILE\|GENERATE_INFOPLIST_FILE\|CURRENT_PROJECT_VERSION\|MARKETING_VERSION" Big4Watchability.xcodeproj/project.pbxproj
-          echo "--- Resolved build settings for the Release config xcodebuild will actually use ---"
-          xcodebuild -showBuildSettings -project Big4Watchability.xcodeproj -scheme Big4Watchability -destination 'generic/platform=iOS' 2>&1 | grep -i "infoplist\|current_project_version\|marketing_version\|configuration "
+          echo "=== Resolved build settings - Debug ==="
+          xcodebuild -showBuildSettings -configuration Debug -project Big4Watchability.xcodeproj -scheme Big4Watchability -destination 'generic/platform=iOS' 2>&1 | grep -i "infoplist\|current_project_version\|marketing_version\| configuration "
+          echo "=== Resolved build settings - Release ==="
+          xcodebuild -showBuildSettings -configuration Release -project Big4Watchability.xcodeproj -scheme Big4Watchability -destination 'generic/platform=iOS' 2>&1 | grep -i "infoplist\|current_project_version\|marketing_version\| configuration "
 
       # Standard "decode base64 secret -> temp keychain" pattern (same one
       # GitHub's own docs and most iOS CI tutorials use) - keeps the actual
@@ -80,6 +87,7 @@ jobs:
           xcodebuild archive \
             -project Big4Watchability.xcodeproj \
             -scheme Big4Watchability \
+            -configuration Release \
             -archivePath $RUNNER_TEMP/Big4Watchability.xcarchive \
             -destination 'generic/platform=iOS' \
             CODE_SIGN_STYLE=Manual \
@@ -95,15 +103,13 @@ jobs:
       - name: Inspect built archive (debug)
         run: |
           APP_PATH="$RUNNER_TEMP/Big4Watchability.xcarchive/Products/Applications/Big4Watchability.app"
-          echo "--- Info.plist (orientation keys) ---"
-          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP_PATH/Info.plist" || echo "MISSING base key"
-          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations~ipad" "$APP_PATH/Info.plist" || echo "MISSING ~ipad key"
-          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations~iphone" "$APP_PATH/Info.plist" || echo "MISSING ~iphone key"
-          echo "--- Full Info.plist ---"
+          echo "=== Every Info.plist under DerivedData (any stray/shadow copy) ==="
+          find ~/Library/Developer/Xcode/DerivedData -iname "Info.plist" 2>/dev/null
+          echo "=== Full Info.plist in the built .app ==="
           plutil -p "$APP_PATH/Info.plist"
-          echo "--- Assets.car icon entries ---"
-          find "$APP_PATH" -name "Assets.car" -exec xcrun assetutil --info {} \; | grep -i -A5 "AppIcon\|SizeClass\|\"Name\"" || true
-          echo "--- App bundle top-level contents ---"
+          echo "=== Assets.car icon entries ==="
+          find "$APP_PATH" -name "Assets.car" -exec xcrun assetutil --info {} \; | grep -i -A5 "AppIcon\|SizeClass\|\"Name\"" || echo "NO Assets.car FOUND"
+          echo "=== App bundle top-level contents ==="
           ls -la "$APP_PATH"
 
       - name: Export IPA
