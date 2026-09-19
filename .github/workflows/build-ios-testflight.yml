@@ -108,8 +108,17 @@ jobs:
           grep -A2 "CompileAssetCatalog\|actool" $RUNNER_TEMP/archive.log || echo "NO CompileAssetCatalog LINE FOUND AT ALL"
           echo "=== Any warning/error mentioning Info.plist or Assets.xcassets ==="
           grep -i "warning.*info.plist\|error.*info.plist\|warning.*xcassets\|error.*xcassets" $RUNNER_TEMP/archive.log || echo "none"
-          echo "=== Processed-Info.plist files under DerivedData, dumped ==="
-          find ~/Library/Developer/Xcode/DerivedData -name "Processed-Info.plist" -exec echo "--- {} ---" \; -exec plutil -p {} \;
+          # The ProcessInfoPlistFile line above showed the REAL output path for
+          # archive builds goes to ArchiveIntermediates/.../
+          # InstallationBuildProductsLocation/Applications/*.app/Info.plist -
+          # a plain "Info.plist", not "Processed-Info.plist" (that name only
+          # applies to regular non-archive builds). Dump every Info.plist
+          # under DerivedData by its real name so nothing is missed.
+          echo "=== Every Info.plist under DerivedData, dumped ==="
+          find ~/Library/Developer/Xcode/DerivedData -name "Info.plist" | while read -r f; do
+            echo "--- $f ---"
+            plutil -p "$f"
+          done
 
       # Diagnostic only - added after two upload rejections (orientation +
       # icon errors) that shouldn't be possible given the source files are
