@@ -74,6 +74,25 @@ jobs:
             CODE_SIGN_IDENTITY="Apple Distribution" \
             DEVELOPMENT_TEAM="${{ secrets.IOS_APPLE_TEAM_ID }}"
 
+      # Diagnostic only - added after two upload rejections (orientation +
+      # icon errors) that shouldn't be possible given the source files are
+      # verified correct on disk. Rather than guess a third time, dump the
+      # ACTUAL built product's Info.plist and asset catalog so we can see
+      # what Apple is really validating instead of what we assume shipped.
+      - name: Inspect built archive (debug)
+        run: |
+          APP_PATH="$RUNNER_TEMP/Big4Watchability.xcarchive/Products/Applications/Big4Watchability.app"
+          echo "--- Info.plist (orientation keys) ---"
+          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations" "$APP_PATH/Info.plist" || echo "MISSING base key"
+          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations~ipad" "$APP_PATH/Info.plist" || echo "MISSING ~ipad key"
+          /usr/libexec/PlistBuddy -c "Print :UISupportedInterfaceOrientations~iphone" "$APP_PATH/Info.plist" || echo "MISSING ~iphone key"
+          echo "--- Full Info.plist ---"
+          plutil -p "$APP_PATH/Info.plist"
+          echo "--- Assets.car icon entries ---"
+          find "$APP_PATH" -name "Assets.car" -exec xcrun assetutil --info {} \; | grep -i -A5 "AppIcon\|SizeClass\|\"Name\"" || true
+          echo "--- App bundle top-level contents ---"
+          ls -la "$APP_PATH"
+
       - name: Export IPA
         run: |
           cat > $RUNNER_TEMP/ExportOptions.plist << EOF
