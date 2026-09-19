@@ -84,6 +84,7 @@ jobs:
 
       - name: Archive (signed)
         run: |
+          set -o pipefail
           xcodebuild archive \
             -project Big4Watchability.xcodeproj \
             -scheme Big4Watchability \
@@ -93,7 +94,22 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             PROVISIONING_PROFILE_SPECIFIER="${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}" \
             CODE_SIGN_IDENTITY="Apple Distribution" \
-            DEVELOPMENT_TEAM="${{ secrets.IOS_APPLE_TEAM_ID }}"
+            DEVELOPMENT_TEAM="${{ secrets.IOS_APPLE_TEAM_ID }}" \
+            | tee $RUNNER_TEMP/archive.log
+
+      # The archive build log names the EXACT input file Xcode read for
+      # every Info.plist/asset-catalog processing step - direct evidence
+      # of what actually happened, rather than inferring from settings.
+      - name: Grep archive log for Info.plist / asset catalog processing (debug)
+        run: |
+          echo "=== ProcessInfoPlistFile lines (shows real input path used) ==="
+          grep -A2 "ProcessInfoPlistFile" $RUNNER_TEMP/archive.log || echo "NO ProcessInfoPlistFile LINE FOUND AT ALL"
+          echo "=== CompileAssetCatalog / actool lines ==="
+          grep -A2 "CompileAssetCatalog\|actool" $RUNNER_TEMP/archive.log || echo "NO CompileAssetCatalog LINE FOUND AT ALL"
+          echo "=== Any warning/error mentioning Info.plist or Assets.xcassets ==="
+          grep -i "warning.*info.plist\|error.*info.plist\|warning.*xcassets\|error.*xcassets" $RUNNER_TEMP/archive.log || echo "none"
+          echo "=== Processed-Info.plist files under DerivedData, dumped ==="
+          find ~/Library/Developer/Xcode/DerivedData -name "Processed-Info.plist" -exec echo "--- {} ---" \; -exec plutil -p {} \;
 
       # Diagnostic only - added after two upload rejections (orientation +
       # icon errors) that shouldn't be possible given the source files are
