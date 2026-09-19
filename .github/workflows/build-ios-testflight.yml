@@ -87,6 +87,11 @@ jobs:
             <string>${{ secrets.IOS_APPLE_TEAM_ID }}</string>
             <key>signingStyle</key>
             <string>manual</string>
+            <key>provisioningProfiles</key>
+            <dict>
+              <key>com.nbawatchability.app</key>
+              <string>${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}</string>
+            </dict>
           </dict>
           </plist>
           EOF
