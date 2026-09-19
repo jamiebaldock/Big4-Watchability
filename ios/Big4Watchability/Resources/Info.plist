@@ -10,7 +10,21 @@
 	<string>1</string>
 	<key>UILaunchScreen</key>
 	<dict/>
+	<!-- Apple's App Store validator requires the base (non-suffixed) key to
+	     declare all 4 orientations to support iPad multitasking, regardless
+	     of the more specific ~ipad override below - a real upload rejection
+	     hit on the first-ever TestFlight submission attempt (2026-09-20),
+	     not a guess. The ~iphone override restores the original portrait-
+	     only intent for iPhone specifically, since without it iPhone would
+	     otherwise fall back to this now-permissive base key. -->
 	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UISupportedInterfaceOrientations~iphone</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
