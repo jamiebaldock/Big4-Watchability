@@ -30,6 +30,19 @@ jobs:
       - name: Generate Xcode project
         run: xcodegen generate
 
+      # Three separate Info.plist/project.yml edits in a row produced a
+      # byte-for-byte IDENTICAL archived Info.plist (same "1"/"1.0" values,
+      # same missing keys) - meaning our source edits may not even be
+      # reaching the generated project. Check that BEFORE building again.
+      - name: Verify generated project (debug)
+        run: |
+          echo "--- Source Info.plist as checked out ---"
+          cat Big4Watchability/Resources/Info.plist
+          echo "--- project.pbxproj INFOPLIST_FILE / GENERATE_INFOPLIST_FILE lines ---"
+          grep -n "INFOPLIST_FILE\|GENERATE_INFOPLIST_FILE\|CURRENT_PROJECT_VERSION\|MARKETING_VERSION" Big4Watchability.xcodeproj/project.pbxproj
+          echo "--- Resolved build settings for the Release config xcodebuild will actually use ---"
+          xcodebuild -showBuildSettings -project Big4Watchability.xcodeproj -scheme Big4Watchability -destination 'generic/platform=iOS' 2>&1 | grep -i "infoplist\|current_project_version\|marketing_version\|configuration "
+
       # Standard "decode base64 secret -> temp keychain" pattern (same one
       # GitHub's own docs and most iOS CI tutorials use) - keeps the actual
       # certificate/profile files out of the repo entirely, only ever living
