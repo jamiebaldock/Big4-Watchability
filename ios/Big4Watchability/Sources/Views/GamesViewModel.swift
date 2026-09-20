@@ -197,25 +197,53 @@ final class GamesViewModel: ObservableObject {
         }
     }
 
+    // The backend buckets each game under whichever date its scoreboard
+    // fetch used (ESPN's own US-Eastern-based scoreboard day), not the
+    // viewer's local calendar date - confirmed as a real bug on the very
+    // first day-navigation TestFlight build (2026-09-20): a viewer in
+    // Hobart (UTC+10, ~14-15h from US Eastern) saw today's WNBA games
+    // parked under "Yesterday". GameListViewModel.kt's own QUERY_BUFFER_DAYS
+    // comment already documents this exact mismatch and re-buckets every
+    // game itself by the local date its tipoff actually falls on - this
+    // mirrors that: fetch a couple of days of buffer beyond what's needed,
+    // regroup every game by its own utc field converted to the device's
+    // local calendar date, then slice back down to the requested window.
+    private static let queryBufferDays = 2
+
     private func fetchDays(start: Date, end: Date, allLeagues: Bool) async throws -> [DayGames] {
-        let startString = start.apiDateString
-        let endString = end.apiDateString
+        let bufferedStartString = addDays(-Self.queryBufferDays, to: start).apiDateString
+        let bufferedEndString = addDays(Self.queryBufferDays, to: end).apiDateString
+
+        let allGames: [GameJson]
         if allLeagues {
-            return try await withThrowingTaskGroup(of: [DayGames].self) { group in
+            allGames = try await withThrowingTaskGroup(of: [GameJson].self) { group in
                 for league in LeagueGroup.allCases {
-                    group.addTask { try await self.client.scheduleByDay(start: startString, end: endString, leagueGroup: league) }
-                }
-                var merged: [String: DayGames] = [:]
-                for try await leagueDays in group {
-                    for day in leagueDays {
-                        merged[day.date, default: DayGames(date: day.date, games: [])].games += day.games
+                    group.addTask {
+                        let days = try await self.client.scheduleByDay(start: bufferedStartString, end: bufferedEndString, leagueGroup: league)
+                        return days.flatMap { $0.games }
                     }
                 }
-                return merged.values.sorted { $0.date < $1.date }
+                var merged: [GameJson] = []
+                for try await batch in group { merged += batch }
+                return merged
             }
         } else {
-            return try await client.scheduleByDay(start: startString, end: endString, leagueGroup: leagueGroup)
+            let days = try await client.scheduleByDay(start: bufferedStartString, end: bufferedEndString, leagueGroup: leagueGroup)
+            allGames = days.flatMap { $0.games }
         }
+
+        var byLocalDate: [String: [GameJson]] = [:]
+        for game in allGames {
+            guard let tipoff = GameCardView.parseUtc(game.utc) else { continue }
+            byLocalDate[tipoff.apiDateString, default: []].append(game)
+        }
+
+        let startString = start.apiDateString
+        let endString = end.apiDateString
+        return byLocalDate
+            .filter { $0.key >= startString && $0.key <= endString }
+            .map { DayGames(date: $0.key, games: $0.value) }
+            .sorted { $0.date < $1.date }
     }
 
     private func addDays(_ n: Int, to date: Date) -> Date {
