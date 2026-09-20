@@ -78,7 +78,7 @@ struct GameDetailView: View {
                 }
                 .padding()
             }
-            .navigationTitle("\(game.al ?? game.a) at \(game.hl ?? game.h)")
+            .navigationTitle("\(game.a) at \(game.h)")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -99,7 +99,7 @@ struct GameDetailView: View {
     }
 
     private var shareText: String {
-        var text = "\(game.al ?? game.a) @ \(game.hl ?? game.h)"
+        var text = "\(game.a) @ \(game.h)"
         if let awayScore = game.awayScore, let homeScore = game.homeScore {
             text += " (\(awayScore)-\(homeScore))"
         }

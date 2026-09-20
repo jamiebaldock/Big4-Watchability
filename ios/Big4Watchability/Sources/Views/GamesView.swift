@@ -172,7 +172,7 @@ private struct GameRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("\(game.al ?? game.a) @ \(game.hl ?? game.h)")
+                Text("\(game.a) @ \(game.h)")
                     .font(.headline)
                 if game.yt != nil {
                     Image(systemName: "play.circle.fill")

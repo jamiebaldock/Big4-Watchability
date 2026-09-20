@@ -178,8 +178,8 @@ private struct HistoryRow: View {
     }
 
     private var matchupText: String {
-        let away = game.al ?? game.a
-        let home = game.hl ?? game.h
+        let away = game.a
+        let home = game.h
         if let awayScore = game.awayScore, let homeScore = game.homeScore {
             return "\(away) \(awayScore) @ \(home) \(homeScore)"
         }
