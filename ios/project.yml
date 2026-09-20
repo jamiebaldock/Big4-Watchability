@@ -10,12 +10,17 @@ targets:
   Big4Watchability:
     type: application
     platform: iOS
+    # Assets.xcassets moved from `resources:` to `sources:` - the archive
+    # build log proved actool/CompileAssetCatalog never ran at all under
+    # `resources:` (even pointed directly at the .xcassets path alone),
+    # which is why Assets.car never made it into the bundle. `sources:`
+    # entries get full type-aware handling (splitting compile-sources vs.
+    # copy-bundle-resources, recognizing .xcassets as an asset catalog
+    # needing compilation) where `resources:` is a blunter copy mechanism.
+    # Resources/ has nothing else in it now that Info.plist is gone, so
+    # the separate `resources:` block is removed entirely.
     sources:
       - path: Big4Watchability/Sources
-    resources:
-      - path: Big4Watchability/Resources
-        excludes:
-          - "Assets.xcassets/**"
       - path: Big4Watchability/Resources/Assets.xcassets
     settings:
       base:
