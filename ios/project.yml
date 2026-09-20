@@ -56,3 +56,9 @@ targets:
         # suffixes are honored by Xcode's synthesis mechanism the same
         # way they are for a hand-written Info.plist key.
         INFOPLIST_KEY_UISupportedInterfaceOrientations: "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight"
+        # The app only ever makes standard HTTPS/TLS calls (confirmed in
+        # the F8 pre-submission audit - no custom/proprietary crypto
+        # anywhere in ios/), which is Apple's "exempt" encryption category.
+        # Declaring this up front skips the export-compliance prompt App
+        # Store Connect otherwise asks on every single build upload.
+        INFOPLIST_KEY_ITSAppUsesNonExemptEncryption: NO
