@@ -75,9 +75,24 @@ struct APIClient {
         try await get("/team-schedule?teamId=\(teamId)&leagueGroup=\(leagueGroup.apiValue)")
     }
 
-    /// GET /schedule-counts?year=&month=&leagueGroup=
+    /// GET /schedule-counts?year=&month=&leagueGroup= - returns a flat JSON
+    /// array of raw UTC tipoff timestamps (one per game), NOT pre-aggregated
+    /// per-day counts - this was decoded as [String: Int] before, which can
+    /// never match that shape and silently failed every single call (the
+    /// calendar picker never actually showed a count, confirmed on the first
+    /// real-device test, 2026-09-20). Mirrors NetworkGameRepository.kt's
+    /// scheduleCounts exactly: group by the device's own LOCAL calendar date
+    /// (not ESPN's US-Eastern scoreboard day - same reasoning as
+    /// GamesViewModel.fetchDays' re-bucketing), a day with zero games is
+    /// simply absent from the result rather than an explicit 0.
     func scheduleCounts(year: Int, month: Int, leagueGroup: LeagueGroup) async throws -> [String: Int] {
-        try await get("/schedule-counts?year=\(year)&month=\(month)&leagueGroup=\(leagueGroup.apiValue)")
+        let timestamps: [String] = try await get("/schedule-counts?year=\(year)&month=\(month)&leagueGroup=\(leagueGroup.apiValue)")
+        var counts: [String: Int] = [:]
+        for timestamp in timestamps {
+            guard let date = GameCardView.parseUtc(timestamp) else { continue }
+            counts[date.apiDateString, default: 0] += 1
+        }
+        return counts
     }
 
     // Mirrors NetworkLeagueContentRepository.kt below this point.
