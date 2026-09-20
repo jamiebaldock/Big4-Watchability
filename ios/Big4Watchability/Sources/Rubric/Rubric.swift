@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 
 // Swift port of backend/src/rubric.ts's NBA/WNBA scoring - bracket
 // boundaries and point values must stay bit-for-bit identical to that file
@@ -36,6 +37,16 @@ enum WatchabilityTier: String {
         case .worthYourTime: return "⭐"
         case .solid: return "👍"
         case .skippable: return "😴"
+        }
+    }
+
+    // Matches TierBadge.kt's Tier.color() extension.
+    var color: Color {
+        switch self {
+        case .instantClassic: return AppColors.tierInstantClassic
+        case .worthYourTime: return AppColors.tierWorthYourTime
+        case .solid: return AppColors.tierSolid
+        case .skippable: return AppColors.tierSkippable
         }
     }
 }

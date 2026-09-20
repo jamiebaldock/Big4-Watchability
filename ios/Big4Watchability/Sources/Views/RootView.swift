@@ -57,7 +57,14 @@ struct RootView: View {
                     .tag(tab)
             }
         }
-        .preferredColorScheme(lightTheme ? .light : nil)
+        // Matches Theme.kt's NbaWatchabilityTheme: the app's own dark/light
+        // palette is entirely independent of the device's system appearance
+        // (Android ignores system dark mode too) - "nil" here would let a
+        // device set to Light Mode silently override this app's own
+        // default-dark branding, which is what actually happened on the
+        // first-ever real-device look at this app (2026-09-20).
+        .preferredColorScheme(lightTheme ? .light : .dark)
+        .environment(\.appTheme, lightTheme ? .light : .dark)
         .onAppear {
             // Only sets the INITIAL tab on cold launch, not a "remember last
             // tab" - matches Android's defaultLandingTab, a Settings choice

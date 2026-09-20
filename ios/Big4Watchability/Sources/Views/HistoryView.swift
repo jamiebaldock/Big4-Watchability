@@ -10,6 +10,7 @@ struct HistoryView: View {
     @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
     @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
+    @Environment(\.appTheme) private var theme
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @State private var selectedGameForDetail: GameJson?
     @State private var selectedHighlightsVideoId: String?
@@ -72,33 +73,39 @@ struct HistoryView: View {
     private var content: some View {
         if viewModel.isLoading && viewModel.games.isEmpty {
             ProgressView()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.backgroundBase)
         } else if let message = viewModel.errorMessage {
             EmptyStateView(title: message, systemImage: "wifi.slash")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.backgroundBase)
         } else if viewModel.games.isEmpty {
             EmptyStateView(title: "No watchable games yet this season", systemImage: "clock.arrow.circlepath")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(theme.backgroundBase)
         } else {
-            List(displayedGames) { game in
-                HistoryRow(
-                    game: game,
-                    showNumericScore: showNumericScore,
-                    scoreAndTier: game.effectiveScoreAndTier(
-                        nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
-                        mlb: mlbWeightsStore.weights,
-                        nfl: nflWeightsStore.weights,
-                        nhl: nhlWeightsStore.weights
-                    ),
-                    confettiEnabled: confettiEnabled
-                )
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if game.hasBreakdown {
-                        selectedGameForDetail = game
-                    } else if let videoId = game.yt {
-                        selectedHighlightsVideoId = videoId
+            ScrollView {
+                LazyVStack(spacing: 12) {
+                    ForEach(displayedGames) { game in
+                        GameCardView(
+                            game: game,
+                            showNumericScore: showNumericScore,
+                            scoreAndTier: game.effectiveScoreAndTier(
+                                nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
+                                mlb: mlbWeightsStore.weights,
+                                nfl: nflWeightsStore.weights,
+                                nhl: nhlWeightsStore.weights
+                            ),
+                            confettiEnabled: confettiEnabled,
+                            showDate: true,
+                            onTap: { selectedGameForDetail = game },
+                            onWatchHighlights: { selectedHighlightsVideoId = $0 }
+                        )
                     }
                 }
+                .padding(16)
             }
-            .listStyle(.plain)
+            .background(theme.backgroundBase)
         }
     }
 
@@ -128,62 +135,6 @@ struct HistoryView: View {
                 }
             }
         )
-    }
-}
-
-private struct HistoryRow: View {
-    let game: GameJson
-    let showNumericScore: Bool
-    let scoreAndTier: (score: Int, tier: WatchabilityTier)?
-    let confettiEnabled: Bool
-
-    @State private var showConfetti = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(matchupText)
-                    .font(.headline)
-                Spacer()
-                if let scoreAndTier {
-                    ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
-                }
-            }
-            Text(game.hook)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            if let performers = game.sop, !performers.isEmpty {
-                StandoutPerformerCallout(game: game, performers: performers)
-            }
-        }
-        .padding(.vertical, 4)
-        .overlay {
-            if showConfetti {
-                GeometryReader { proxy in
-                    ConfettiBurst(onFinished: { showConfetti = false })
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
-                .allowsHitTesting(false)
-            }
-        }
-        .task(id: "\(game.id)-\(scoreAndTier?.tier.rawValue ?? "")-\(game.stt.rawValue)") {
-            guard let scoreAndTier, scoreAndTier.tier == .instantClassic, game.stt == .final else { return }
-            guard InstantClassicCelebrationTracker.markIfFirstTime(game.id) else { return }
-            if confettiEnabled {
-                showConfetti = true
-                fireInstantClassicHaptic()
-            }
-        }
-    }
-
-    private var matchupText: String {
-        let away = game.a
-        let home = game.h
-        if let awayScore = game.awayScore, let homeScore = game.homeScore {
-            return "\(away) \(awayScore) @ \(home) \(homeScore)"
-        }
-        return "\(away) @ \(home)"
     }
 }
 

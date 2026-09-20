@@ -1,7 +1,8 @@
 import SwiftUI
 
-// Shared tier-colored score pill - used by GamesView and HistoryView (and
-// anywhere else a game's watchability score gets displayed).
+// Tier-colored score pill - now only used by AboutView's tier legend
+// (GamesView/StarredView/HistoryView moved to TierBadge via GameCardView,
+// matching Android's actual on-tile badge).
 struct ScoreBadge: View {
     let score: Int
     let tier: WatchabilityTier
@@ -22,12 +23,5 @@ struct ScoreBadge: View {
         .foregroundStyle(tint)
     }
 
-    private var tint: Color {
-        switch tier {
-        case .instantClassic: return .red
-        case .worthYourTime: return .orange
-        case .solid: return .yellow
-        case .skippable: return .gray
-        }
-    }
+    private var tint: Color { tier.color }
 }

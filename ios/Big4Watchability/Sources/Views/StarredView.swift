@@ -8,6 +8,7 @@ struct StarredView: View {
     @ObservedObject private var mlbWeightsStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflWeightsStore = NflRubricWeightsStore.shared
     @ObservedObject private var nhlWeightsStore = NhlRubricWeightsStore.shared
+    @Environment(\.appTheme) private var theme
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
     @AppStorage(AppSettingsKeys.confettiEnabled) private var confettiEnabled = true
@@ -33,36 +34,33 @@ struct StarredView: View {
             Group {
                 if store.games.isEmpty {
                     EmptyStateView(title: "Star a game to find it here", systemImage: "star")
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .background(theme.backgroundBase)
                 } else {
-                    List {
-                        ForEach(displayedGames) { game in
-                            StarredRow(
-                                game: game,
-                                showNumericScore: showNumericScore,
-                                scoreAndTier: game.effectiveScoreAndTier(
-                                    nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
-                                    mlb: mlbWeightsStore.weights,
-                                    nfl: nflWeightsStore.weights,
-                                    nhl: nhlWeightsStore.weights
-                                ),
-                                confettiEnabled: confettiEnabled
-                            )
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                if game.hasBreakdown {
-                                    selectedGameForDetail = game
-                                } else if let videoId = game.yt {
-                                    selectedHighlightsVideoId = videoId
-                                }
-                            }
-                            .swipeActions {
-                                Button("Unstar", role: .destructive) {
-                                    store.toggle(game)
-                                }
+                    ScrollView {
+                        LazyVStack(spacing: 12) {
+                            ForEach(displayedGames) { game in
+                                GameCardView(
+                                    game: game,
+                                    showNumericScore: showNumericScore,
+                                    scoreAndTier: game.effectiveScoreAndTier(
+                                        nba: weightsStore.weights(for: LeagueGroup(espnLeague: game.lg)),
+                                        mlb: mlbWeightsStore.weights,
+                                        nfl: nflWeightsStore.weights,
+                                        nhl: nhlWeightsStore.weights
+                                    ),
+                                    confettiEnabled: confettiEnabled,
+                                    isStarred: true,
+                                    onToggleStar: { store.toggle(game) },
+                                    showDate: true,
+                                    onTap: { selectedGameForDetail = game },
+                                    onWatchHighlights: { selectedHighlightsVideoId = $0 }
+                                )
                             }
                         }
+                        .padding(16)
                     }
-                    .listStyle(.plain)
+                    .background(theme.backgroundBase)
                 }
             }
             .navigationTitle("Starred")
@@ -88,53 +86,6 @@ struct StarredView: View {
                         selectedHighlightsVideoId = videoId
                     }
                 )
-            }
-        }
-    }
-}
-
-private struct StarredRow: View {
-    let game: GameJson
-    let showNumericScore: Bool
-    let scoreAndTier: (score: Int, tier: WatchabilityTier)?
-    let confettiEnabled: Bool
-
-    @State private var showConfetti = false
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text("\(game.a) @ \(game.h)")
-                    .font(.headline)
-                Spacer()
-                if game.scoreVisible, let scoreAndTier {
-                    ScoreBadge(score: scoreAndTier.score, tier: scoreAndTier.tier, showNumber: showNumericScore)
-                }
-            }
-            Text(game.hook)
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-                .lineLimit(2)
-            if let performers = game.sop, !performers.isEmpty {
-                StandoutPerformerCallout(game: game, performers: performers)
-            }
-        }
-        .padding(.vertical, 4)
-        .overlay {
-            if showConfetti {
-                GeometryReader { proxy in
-                    ConfettiBurst(onFinished: { showConfetti = false })
-                        .frame(width: proxy.size.width, height: proxy.size.height)
-                }
-                .allowsHitTesting(false)
-            }
-        }
-        .task(id: "\(game.id)-\(scoreAndTier?.tier.rawValue ?? "")-\(game.stt.rawValue)") {
-            guard let scoreAndTier, scoreAndTier.tier == .instantClassic, game.stt == .final else { return }
-            guard InstantClassicCelebrationTracker.markIfFirstTime(game.id) else { return }
-            if confettiEnabled {
-                showConfetti = true
-                fireInstantClassicHaptic()
             }
         }
     }
