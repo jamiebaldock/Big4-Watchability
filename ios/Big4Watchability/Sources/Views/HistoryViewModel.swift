@@ -26,7 +26,7 @@ final class HistoryViewModel: ObservableObject {
                 games = try await Self.fetchAllLeagues(client: client)
             } else {
                 let seasonStart = try await client.currentSeasonStart(leagueGroup: leagueGroup).date
-                let end = Self.dayFormatter.string(from: Date())
+                let end = Date().apiDateString
                 let response = try await client.history(start: seasonStart, end: end, leagueGroup: leagueGroup)
                 games = response.games.sorted { $0.utc > $1.utc }
             }
@@ -41,7 +41,7 @@ final class HistoryViewModel: ObservableObject {
     // (season-start-lookup, history-fetch) pair still runs concurrently
     // with every other league's, just not sharing a single start value.
     private static func fetchAllLeagues(client: APIClient) async throws -> [GameJson] {
-        let end = dayFormatter.string(from: Date())
+        let end = Date().apiDateString
         return try await withThrowingTaskGroup(of: [GameJson].self) { group in
             for league in LeagueGroup.allCases {
                 group.addTask {
@@ -56,11 +56,4 @@ final class HistoryViewModel: ObservableObject {
             return merged.sorted { $0.utc > $1.utc }
         }
     }
-
-    private static let dayFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone(identifier: "UTC")
-        return formatter
-    }()
 }

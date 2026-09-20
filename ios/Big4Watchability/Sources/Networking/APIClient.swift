@@ -45,10 +45,17 @@ struct APIClient {
     /// [GameJson] and failed on every call (the Games tab never worked -
     /// found on the very first real-device TestFlight install, 2026-09-20).
     func schedule(start: String, end: String, leagueGroup: LeagueGroup) async throws -> [GameJson] {
-        struct DayGamesResponse: Decodable { let date: String; let games: [GameJson] }
-        struct ScheduleResponse: Decodable { let schedule: [DayGamesResponse] }
+        try await scheduleByDay(start: start, end: end, leagueGroup: leagueGroup).flatMap { $0.games }
+    }
+
+    /// Same endpoint as `schedule` above, but keeps the backend's per-day
+    /// grouping instead of flattening it - needed for the multi-day paging
+    /// view (GamesView's day-tab row + swipeable pager), which needs to know
+    /// which games belong to which date, not just one merged list.
+    func scheduleByDay(start: String, end: String, leagueGroup: LeagueGroup) async throws -> [DayGames] {
+        struct ScheduleResponse: Decodable { let schedule: [DayGames] }
         let response: ScheduleResponse = try await get("/schedule?start=\(start)&end=\(end)&leagueGroup=\(leagueGroup.apiValue)")
-        return response.schedule.flatMap { $0.games }
+        return response.schedule
     }
 
     /// GET /next-game-date?after=&leagueGroup=
