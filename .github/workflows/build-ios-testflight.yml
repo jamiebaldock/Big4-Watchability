@@ -38,11 +38,9 @@ jobs:
       # since a scrolled screenshot of raw `cat` output is easy to miscount.
       - name: Verify generated project (debug)
         run: |
-          echo "=== SOURCE PLIST START ==="
-          cat Big4Watchability/Resources/Info.plist
-          echo "=== SOURCE PLIST END (lines: $(wc -l < Big4Watchability/Resources/Info.plist), md5: $(md5 -q Big4Watchability/Resources/Info.plist)) ==="
-          echo "=== Any OTHER file named Info.plist anywhere in the checkout ==="
-          find . -iname "Info.plist"
+          echo "=== No custom Info.plist file anymore - using GENERATE_INFOPLIST_FILE instead ==="
+          echo "=== Any file named Info.plist anywhere in the checkout (should be none) ==="
+          find . -iname "Info.plist" || true
           echo "=== pbxproj INFOPLIST_FILE / GENERATE_INFOPLIST_FILE / version lines ==="
           grep -n "INFOPLIST_FILE\|GENERATE_INFOPLIST_FILE\|CURRENT_PROJECT_VERSION\|MARKETING_VERSION" Big4Watchability.xcodeproj/project.pbxproj
           echo "=== Resolved build settings - Debug ==="
