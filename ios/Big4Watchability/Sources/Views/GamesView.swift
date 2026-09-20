@@ -102,9 +102,7 @@ struct GamesView: View {
             .sheet(isPresented: $showCalendar) {
                 SeasonCalendarView(
                     initialMonth: currentDayDate ?? viewModel.today,
-                    gameCounts: viewModel.monthCounts,
-                    gameCountsMonth: viewModel.monthCountsMonth,
-                    isLoadingCounts: viewModel.isLoadingMonthCounts,
+                    viewModel: viewModel,
                     onMonthChanged: { month in Task { await viewModel.loadMonthCounts(month: month, allLeagues: allLeagues) } },
                     onDateSelected: { date in Task { await viewModel.jumpToDate(date, allLeagues: allLeagues) } }
                 )

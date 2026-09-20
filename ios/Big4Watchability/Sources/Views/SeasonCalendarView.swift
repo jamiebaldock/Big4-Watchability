@@ -8,11 +8,16 @@ import SwiftUI
 // the day pager this same screen already has.
 struct SeasonCalendarView: View {
     let initialMonth: Date
-    let gameCounts: [String: Int]
-    let gameCountsMonth: Date?
-    let isLoadingCounts: Bool
     let onMonthChanged: (Date) -> Void
     let onDateSelected: (Date) -> Void
+
+    // Observed directly (not snapshotted into plain `let` properties at
+    // sheet-presentation time) - counts load asynchronously after the sheet
+    // already appears, and a `.sheet` content closure's captured values
+    // don't reliably refresh once presented. Observing the view model here
+    // means Combine's own publisher drives the re-render instead, which
+    // works regardless of that timing.
+    @ObservedObject var viewModel: GamesViewModel
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.appTheme) private var theme
@@ -20,16 +25,12 @@ struct SeasonCalendarView: View {
 
     init(
         initialMonth: Date,
-        gameCounts: [String: Int],
-        gameCountsMonth: Date?,
-        isLoadingCounts: Bool,
+        viewModel: GamesViewModel,
         onMonthChanged: @escaping (Date) -> Void,
         onDateSelected: @escaping (Date) -> Void
     ) {
         self.initialMonth = initialMonth
-        self.gameCounts = gameCounts
-        self.gameCountsMonth = gameCountsMonth
-        self.isLoadingCounts = isLoadingCounts
+        self.viewModel = viewModel
         self.onMonthChanged = onMonthChanged
         self.onDateSelected = onDateSelected
         _currentMonth = State(initialValue: initialMonth)
@@ -59,7 +60,7 @@ struct SeasonCalendarView: View {
                     Text(Self.monthYearFormatter.string(from: currentMonth))
                         .font(.title3.bold())
                         .foregroundStyle(theme.textPrimary)
-                    if isLoadingCounts && !Calendar.current.isDate(gameCountsMonth ?? .distantPast, equalTo: currentMonth, toGranularity: .month) {
+                    if viewModel.isLoadingMonthCounts && !Calendar.current.isDate(viewModel.monthCountsMonth ?? .distantPast, equalTo: currentMonth, toGranularity: .month) {
                         ProgressView().scaleEffect(0.7)
                     }
                 }
@@ -98,7 +99,7 @@ struct SeasonCalendarView: View {
         // weekday: 1=Sunday...7=Saturday - remap to a 0-based Sunday-first offset.
         let leadingBlanks = calendar.component(.weekday, from: firstOfMonth) - 1
         let daysInMonth = calendar.range(of: .day, in: .month, for: firstOfMonth)?.count ?? 30
-        let showCounts = gameCountsMonth.map { calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) } ?? false
+        let showCounts = viewModel.monthCountsMonth.map { calendar.isDate($0, equalTo: currentMonth, toGranularity: .month) } ?? false
 
         return VStack(spacing: 4) {
             ForEach(0..<6, id: \.self) { row in
@@ -109,7 +110,7 @@ struct SeasonCalendarView: View {
                             let date = calendar.date(byAdding: .day, value: dayNum - 1, to: firstOfMonth) ?? firstOfMonth
                             CalendarDayCell(
                                 date: date,
-                                gameCount: showCounts ? gameCounts[date.apiDateString] : nil,
+                                gameCount: showCounts ? viewModel.monthCounts[date.apiDateString] : nil,
                                 onTap: {
                                     dismiss()
                                     onDateSelected(date)
