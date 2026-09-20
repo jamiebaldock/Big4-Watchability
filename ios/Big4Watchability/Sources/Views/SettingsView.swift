@@ -6,6 +6,7 @@ import SwiftUI
 // admin PIN entry, and the About/Player Hater Mode easter egg are separate
 // future screens, not toggles here).
 struct SettingsView: View {
+    @Environment(\.appTheme) private var theme
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
     @AppStorage(AppSettingsKeys.bumpFavoriteTeamGames) private var bumpFavoriteTeamGames = true
     @AppStorage(AppSettingsKeys.wifiOnlyHighlights) private var wifiOnlyHighlights = false
@@ -63,7 +64,13 @@ struct SettingsView: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundBase)
+            .tint(AppColors.tierWorthYourTime)
             .navigationTitle("Settings")
+            .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 }

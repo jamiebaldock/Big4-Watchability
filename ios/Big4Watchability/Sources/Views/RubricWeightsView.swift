@@ -8,6 +8,7 @@ struct RubricWeightsView: View {
     @ObservedObject private var mlbStore = MlbRubricWeightsStore.shared
     @ObservedObject private var nflStore = NflRubricWeightsStore.shared
     @ObservedObject private var nhlStore = NhlRubricWeightsStore.shared
+    @Environment(\.appTheme) private var theme
     @State private var league: LeagueGroup = .nba
 
     var body: some View {
@@ -41,7 +42,13 @@ struct RubricWeightsView: View {
                     }
                 }
             }
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .background(theme.backgroundBase)
+            .tint(AppColors.tierWorthYourTime)
             .navigationTitle("Rubric Weights")
+            .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
         }
     }
 

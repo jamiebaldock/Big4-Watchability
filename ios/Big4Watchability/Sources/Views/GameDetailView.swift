@@ -21,6 +21,7 @@ struct GameDetailView: View {
     @StateObject private var viewModel = GameDetailViewModel()
     @State private var selectedTab: GameDetailTab
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.appTheme) private var theme
 
     init(
         game: GameJson,
@@ -78,8 +79,12 @@ struct GameDetailView: View {
                 }
                 .padding()
             }
+            .background(theme.backgroundBase)
+            .tint(AppColors.tierWorthYourTime)
             .navigationTitle("\(game.a) at \(game.h)")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Done") { dismiss() }
@@ -116,9 +121,9 @@ private struct HighlightsRow: View {
     var body: some View {
         HStack {
             Image(systemName: "play.circle.fill")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColors.tierWorthYourTime)
             Text("Watch highlights")
-                .foregroundStyle(.orange)
+                .foregroundStyle(AppColors.tierWorthYourTime)
             Spacer()
             Button("Watch", action: onWatch)
                 .buttonStyle(.borderedProminent)
@@ -155,7 +160,7 @@ private struct BreakdownTab: View {
                 Spacer()
                 Text("\(total)/100")
                     .font(.headline)
-                    .foregroundStyle(.orange)
+                    .foregroundStyle(AppColors.tierWorthYourTime)
                     .monospacedDigit()
             }
         }

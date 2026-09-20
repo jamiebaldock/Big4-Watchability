@@ -10,6 +10,7 @@ private let privacyPolicyURL = URL(string: "https://jamiebaldock.github.io/NBA-W
 private let contactEmail = "help@tech3d.com.au"
 
 struct AboutView: View {
+    @Environment(\.appTheme) private var theme
     @StateObject private var adminViewModel = AdminViewModel()
     @State private var titleTapCount = 0
     @State private var versionTapCount = 0
@@ -109,8 +110,12 @@ struct AboutView: View {
             }
             .padding(.horizontal, 16)
         }
+        .background(theme.backgroundBase)
+        .tint(AppColors.tierWorthYourTime)
         .navigationTitle("About")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
         .sheet(isPresented: $showAdminPin) {
             AdminPinView(viewModel: adminViewModel)
         }
