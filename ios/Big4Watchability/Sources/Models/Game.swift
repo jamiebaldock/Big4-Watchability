@@ -10,6 +10,34 @@ enum LeagueGroup: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var apiValue: String { rawValue }
 
+    // Matches LeagueGroup.kt's displayName/logoUrl exactly (this app only
+    // ever ships the 5 isSupported=true US leagues - soccer/placeholder
+    // entries were archived, never ported here).
+    var displayName: String {
+        switch self {
+        case .nba: return "NBA"
+        case .wnba: return "WNBA"
+        case .mlb: return "MLB"
+        case .nfl: return "NFL"
+        case .nhl: return "NHL"
+        }
+    }
+
+    // shortDisplayName == displayName for all 5 - none of them have a
+    // long official name needing a separate short form (LeagueGroup.kt's
+    // shortDisplayName only diverges for entries this app doesn't ship).
+    var shortDisplayName: String { displayName }
+
+    var logoUrl: String {
+        switch self {
+        case .nba: return "https://a.espncdn.com/i/teamlogos/leagues/500/nba.png"
+        case .wnba: return "https://a.espncdn.com/i/teamlogos/leagues/500/wnba.png"
+        case .mlb: return "https://a.espncdn.com/i/teamlogos/leagues/500/mlb.png"
+        case .nfl: return "https://a.espncdn.com/i/teamlogos/leagues/500/nfl.png"
+        case .nhl: return "https://a.espncdn.com/i/teamlogos/leagues/500/nhl.png"
+        }
+    }
+
     // "summer" (WNBA offseason/exhibition play) has no LeagueGroup of its
     // own - maps to wnba, same as Game.kt's isSummerLeague treatment.
     init(espnLeague: EspnLeague) {

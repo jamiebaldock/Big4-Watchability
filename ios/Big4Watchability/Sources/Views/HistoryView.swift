@@ -23,18 +23,21 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack {
             content
-                .navigationTitle("History")
                 .toolbar {
                     ToolbarItem(placement: .principal) {
-                        Picker("League", selection: leagueSelectionBinding) {
-                            Text("ALL").tag("all")
-                            ForEach(LeagueGroup.allCases) { league in
-                                Text(league.rawValue.uppercased()).tag(league.rawValue)
-                            }
-                        }
-                        .pickerStyle(.segmented)
+                        TitleLeagueSelector(
+                            selectedLeague: viewModel.leagueGroup,
+                            onLeagueSelected: { league in
+                                appSettings.isAllLeaguesSelected = false
+                                viewModel.leagueGroup = league
+                            },
+                            isAllLeaguesSelected: appSettings.isAllLeaguesSelected,
+                            onAllLeaguesSelected: { appSettings.isAllLeaguesSelected = true }
+                        )
                     }
                 }
+                .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
                 .task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
                 .onChange(of: viewModel.leagueGroup) { _ in
                     Task { await viewModel.load(allLeagues: appSettings.isAllLeaguesSelected) }
@@ -120,22 +123,6 @@ struct HistoryView: View {
         )
     }
 
-    // "ALL" plus each LeagueGroup's rawValue as the Picker's tag space -
-    // reading/writing through appSettings.isAllLeaguesSelected and
-    // viewModel.leagueGroup together so one segmented control drives both.
-    private var leagueSelectionBinding: Binding<String> {
-        Binding(
-            get: { appSettings.isAllLeaguesSelected ? "all" : viewModel.leagueGroup.rawValue },
-            set: { newValue in
-                if newValue == "all" {
-                    appSettings.isAllLeaguesSelected = true
-                } else if let league = LeagueGroup(rawValue: newValue) {
-                    appSettings.isAllLeaguesSelected = false
-                    viewModel.leagueGroup = league
-                }
-            }
-        )
-    }
 }
 
 #Preview {

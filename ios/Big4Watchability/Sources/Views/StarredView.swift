@@ -64,6 +64,8 @@ struct StarredView: View {
                 }
             }
             .navigationTitle("Starred")
+            .toolbarBackground(theme.backgroundBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .fullScreenCover(isPresented: Binding(
                 get: { selectedHighlightsVideoId != nil },
                 set: { if !$0 { selectedHighlightsVideoId = nil } }
