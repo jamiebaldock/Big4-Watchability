@@ -37,9 +37,18 @@ struct APIClient {
         }
     }
 
-    /// GET /schedule?start=&end=&leagueGroup=
+    /// GET /schedule?start=&end=&leagueGroup= - the route wraps its result as
+    /// {"schedule": [{"date": ..., "games": [...]}]} (see devServer.ts's
+    /// `res.json({ schedule })`), not a bare array. Mirrors
+    /// NetworkGameRepository.kt's ScheduleResponse/DayGamesResponse - this
+    /// wrapper was missed in the initial iOS port, which decoded straight to
+    /// [GameJson] and failed on every call (the Games tab never worked -
+    /// found on the very first real-device TestFlight install, 2026-09-20).
     func schedule(start: String, end: String, leagueGroup: LeagueGroup) async throws -> [GameJson] {
-        try await get("/schedule?start=\(start)&end=\(end)&leagueGroup=\(leagueGroup.apiValue)")
+        struct DayGamesResponse: Decodable { let date: String; let games: [GameJson] }
+        struct ScheduleResponse: Decodable { let schedule: [DayGamesResponse] }
+        let response: ScheduleResponse = try await get("/schedule?start=\(start)&end=\(end)&leagueGroup=\(leagueGroup.apiValue)")
+        return response.schedule.flatMap { $0.games }
     }
 
     /// GET /next-game-date?after=&leagueGroup=
