@@ -27,6 +27,13 @@ targets:
         DEVELOPMENT_TEAM: ""
         CODE_SIGN_STYLE: Automatic
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        # Apple's own error (90713) named this directly: an asset-catalog
+        # app icon (ASSETCATALOG_COMPILER_APPICON_NAME above) also needs
+        # this companion key set to the same name, or the validator falls
+        # back to expecting old-style loose icon files in the bundle root
+        # instead - which is what the "missing icon file...outside of an
+        # asset catalog" errors (90022/90023) were actually describing.
+        INFOPLIST_KEY_CFBundleIconName: AppIcon
         # Six straight fix attempts against a custom Info.plist file
         # produced byte-identical archived output every time despite the
         # build log proving xcodebuild read the right source with macro
