@@ -57,10 +57,15 @@ struct HighlightsPlayerView: View {
     // YouTube error codes 101/150 both mean "the video owner has disabled
     // embedded playback" (Android's PlayerConstants.VIDEO_NOT_PLAYABLE_IN_
     // EMBEDDED_PLAYER maps to the same underlying restriction) - nothing
-    // this screen can do about it, so bounce straight to the YouTube app/
-    // browser instead of dead-ending on an error the user can't act on.
+    // this screen can do about it. Widened to ANY error code (not just
+    // 101/150) after a real-device report of error 152, which isn't one of
+    // YouTube's documented codes (2/5/100/101/150) - whatever it actually
+    // means, this in-app error message can't act on it either way, and
+    // YouTube's own app/site will show a more useful message if the real
+    // problem is something else (removed/private video, etc.) than a dead
+    // end here would.
     private func handlePlayerError(code: Int) {
-        if code == 101 || code == 150, let url = URL(string: "https://www.youtube.com/watch?v=\(videoId)") {
+        if let url = URL(string: "https://www.youtube.com/watch?v=\(videoId)") {
             UIApplication.shared.open(url)
             dismiss()
         } else {
