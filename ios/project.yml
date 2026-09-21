@@ -16,6 +16,8 @@ configs:
 # on it arriving transitively with GoogleMobileAds - it is imported directly
 # by AdsConsentManager.swift, and an implicitly-available module is exactly
 # the kind of thing that breaks on a dependency's internal restructure.
+# (GoogleMobileAds does depend on it, constrained to 1.1.0..<4.0.0, so the
+# 3.x pin below sits inside that range and can't force a conflict.)
 packages:
   Firebase:
     url: https://github.com/firebase/firebase-ios-sdk.git
@@ -47,8 +49,11 @@ targets:
         product: FirebaseMessaging
       - package: GoogleMobileAds
         product: GoogleMobileAds
+      # Product is GoogleUserMessagingPlatform; the MODULE you import is
+      # plain UserMessagingPlatform. They differ, and naming the module here
+      # fails the build with "Missing package product" (CI run #47).
       - package: UserMessagingPlatform
-        product: UserMessagingPlatform
+        product: GoogleUserMessagingPlatform
     # aps-environment is the one entitlement push needs. XcodeGen writes this
     # file out; the value is deliberately "development" - Xcode's automatic
     # signing rewrites it to "production" when building for distribution, so

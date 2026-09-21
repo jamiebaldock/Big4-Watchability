@@ -163,16 +163,21 @@ extension PushNotificationManager: UNUserNotificationCenterDelegate {
 /// SwiftUI has no hook for the APNs registration callbacks, so the app needs
 /// a real UIApplicationDelegate purely to forward them. Attached via
 /// @UIApplicationDelegateAdaptor in Big4WatchabilityApp.
+///
+/// @MainActor on the class rather than MainActor.assumeIsolated at each call
+/// site: assumeIsolated carries an iOS 17 availability annotation and this
+/// app deploys to 16.0 - the same trap ContentUnavailableView and the
+/// zero-arg .onChange sprang on the very first iOS push. UIKit calls these
+/// methods on the main thread anyway, so the isolation is simply accurate.
+@MainActor
 final class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(
         _ application: UIApplication,
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
-        MainActor.assumeIsolated {
-            PushNotificationManager.shared.configureIfPossible()
-            AdsConsentManager.shared.start()
-        }
+        PushNotificationManager.shared.configureIfPossible()
+        AdsConsentManager.shared.start()
         return true
     }
 
@@ -180,9 +185,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ application: UIApplication,
         didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data
     ) {
-        MainActor.assumeIsolated {
-            PushNotificationManager.shared.setAPNsToken(deviceToken)
-        }
+        PushNotificationManager.shared.setAPNsToken(deviceToken)
     }
 
     func application(
