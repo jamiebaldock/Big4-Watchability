@@ -63,6 +63,29 @@ targets:
       path: Big4Watchability/Big4Watchability.entitlements
       properties:
         aps-environment: development
+    # Belt-and-braces for GADApplicationIdentifier. INFOPLIST_KEY_* synthesis
+    # is documented for Apple's OWN known keys; GADApplicationIdentifier is a
+    # third-party key and there is no guarantee Xcode passes it through. If it
+    # is silently dropped, the Google Mobile Ads SDK raises
+    # GADInvalidInitializationException at launch and the app dies before any
+    # of our code runs - which is exactly what build 12 did on device.
+    #
+    # PlistBuddy against the built Info.plist removes the guesswork: it runs
+    # after the plist is generated and before code signing, and Add-then-Set
+    # is idempotent whether or not the INFOPLIST_KEY above already worked.
+    # This is also the escape hatch for SKAdNetworkItems later, since it can
+    # write arrays of dictionaries that INFOPLIST_KEY_* fundamentally cannot -
+    # all without reintroducing a physical Info.plist file.
+    postBuildScripts:
+      - name: Force third-party Info.plist keys
+        basedOnDependencyAnalysis: false
+        script: |
+          PLIST="${TARGET_BUILD_DIR}/${INFOPLIST_PATH}"
+          APP_ID="ca-app-pub-3940256099942544~1458002511"
+          echo "[plist-fix] target plist: $PLIST"
+          /usr/libexec/PlistBuddy -c "Add :GADApplicationIdentifier string $APP_ID" "$PLIST" 2>/dev/null \
+            || /usr/libexec/PlistBuddy -c "Set :GADApplicationIdentifier $APP_ID" "$PLIST"
+          echo "[plist-fix] GADApplicationIdentifier now: $(/usr/libexec/PlistBuddy -c 'Print :GADApplicationIdentifier' "$PLIST")"
     # Signing lives here, attached to this ONE target, rather than on
     # xcodebuild's command line where it would apply to the SPM package
     # targets too and fail the archive. See Signing.xcconfig's header.
@@ -74,7 +97,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nbawatchability.app
         MARKETING_VERSION: "1.0"
-        CURRENT_PROJECT_VERSION: "12"
+        CURRENT_PROJECT_VERSION: "13"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
         # DEVELOPMENT_TEAM and CODE_SIGN_STYLE deliberately absent (run #28):

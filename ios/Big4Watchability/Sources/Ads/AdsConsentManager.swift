@@ -28,12 +28,34 @@ final class AdsConsentManager: ObservableObject {
 
     private var hasStarted = false
 
+    /// True only when the bundle actually carries an AdMob app id. Without
+    /// it the Google Mobile Ads SDK raises GADInvalidInitializationException,
+    /// an Objective-C exception Swift cannot catch - i.e. a hard crash at
+    /// launch, which is what build 12 did on a real device. Checking first
+    /// makes ads degrade to a no-op instead, the same stance
+    /// PushNotificationManager takes on a missing GoogleService-Info.plist
+    /// and the backend takes on an unset FIREBASE_SERVICE_ACCOUNT.
+    ///
+    /// project.yml force-writes this key via PlistBuddy so it should always
+    /// be present - this guard exists because "should" is what shipped a
+    /// crashing build, and an app that silently drops ads is infinitely
+    /// preferable to one that won't open.
+    private var hasAdMobAppId: Bool {
+        let id = Bundle.main.object(forInfoDictionaryKey: "GADApplicationIdentifier") as? String
+        return !(id ?? "").isEmpty
+    }
+
     /// Called once from the AppDelegate's didFinishLaunching - early enough
     /// that consent is usually resolved before the user reaches a screen
     /// with a banner on it.
     func start() {
         guard !hasStarted else { return }
         hasStarted = true
+
+        guard hasAdMobAppId else {
+            print("[ads] GADApplicationIdentifier missing from Info.plist - ads disabled, app continues")
+            return
+        }
 
         let parameters = RequestParameters()
         // No under-13 content and no child-directed treatment declared -
