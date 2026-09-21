@@ -92,6 +92,16 @@ struct AdminSetHighlightResult: Codable {
     let videoId: String
 }
 
+/// POST /admin/test-push - mirrors Android's TestPushResult. Every field but
+/// `sent` is nil when the backend had no live game to build a test push from.
+struct AdminTestPushResult: Codable {
+    let sent: Bool
+    let eventId: String?
+    let away: String?
+    let home: String?
+    let lg: String?
+}
+
 struct AdminErrorResponse: Codable {
     let error: String?
 }

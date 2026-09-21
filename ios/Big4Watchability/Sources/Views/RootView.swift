@@ -46,16 +46,31 @@ struct RootView: View {
     @AppStorage(AppSettingsKeys.lightTheme) private var lightTheme = false
     @AppStorage(AppSettingsKeys.defaultLandingTab) private var defaultLandingTabRawValue = AppTab.games.rawValue
     @State private var selectedTab: AppTab = .games
+    @ObservedObject private var push = PushNotificationManager.shared
 
     var body: some View {
-        TabView(selection: $selectedTab) {
-            ForEach(AppTab.allCases) { tab in
-                tabContent(for: tab)
-                    .tabItem {
-                        Label(tab.label, systemImage: tab.systemImage)
+        // The banner sits in a VStack ABOVE the TabView's own bar rather than
+        // inside a tab's content, mirroring Android's AdBanner placement in
+        // the Scaffold's bottomBar slot (AppRoot.kt): one fixed strip every
+        // tab shares, so it never shifts as a list scrolls underneath it.
+        VStack(spacing: 0) {
+            ZStack(alignment: .top) {
+                TabView(selection: $selectedTab) {
+                    ForEach(AppTab.allCases) { tab in
+                        tabContent(for: tab)
+                            .tabItem {
+                                Label(tab.label, systemImage: tab.systemImage)
+                            }
+                            .tag(tab)
                     }
-                    .tag(tab)
+                }
+                if let banner = push.inAppBanner {
+                    InAppAlertBanner(title: banner.title, message: banner.body) {
+                        push.inAppBanner = nil
+                    }
+                }
             }
+            AdBannerView()
         }
         // Matches Theme.kt's NbaWatchabilityTheme: the app's own dark/light
         // palette is entirely independent of the device's system appearance
@@ -70,6 +85,12 @@ struct RootView: View {
             // tab" - matches Android's defaultLandingTab, a Settings choice
             // rather than session-restore state.
             selectedTab = AppTab(rawValue: defaultLandingTabRawValue) ?? .games
+        }
+        // A tapped alert always lands on Games. RootView only moves the tab -
+        // GamesView itself consumes the deep link and jumps to the right
+        // league/day, since it's the one that owns the GamesViewModel.
+        .onChange(of: push.pendingDeepLink) { link in
+            if link != nil { selectedTab = .games }
         }
     }
 

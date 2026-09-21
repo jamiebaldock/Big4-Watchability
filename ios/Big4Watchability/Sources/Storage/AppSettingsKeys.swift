@@ -9,6 +9,10 @@ import Foundation
 // only ever contains the 5 already-shipped leagues (soccer was archived
 // entirely, see archive/soccer/), so there is nothing to disable - every
 // league is always "enabled."
+// Alerts settings are NOT here: they live in AlertsStore.swift instead,
+// because unlike these they aren't purely local - every change is
+// snapshotted to the backend (alertStore.ts's full-state upsert), which
+// needs a real store with setters, not bare @AppStorage bindings.
 enum AppSettingsKeys {
     static let showNumericScore = "settings.showNumericScore"
     static let bumpFavoriteTeamGames = "settings.bumpFavoriteTeamGames"

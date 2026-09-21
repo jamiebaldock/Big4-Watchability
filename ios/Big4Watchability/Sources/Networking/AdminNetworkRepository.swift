@@ -35,6 +35,17 @@ enum AdminNetworkRepository {
         return try decoder.decode(AdminSetHighlightResult.self, from: data)
     }
 
+    /// POST /admin/test-push - sends a real push to THIS device, which is
+    /// the only end-to-end way to verify the iOS alerts stack actually
+    /// works (APNs key, Firebase config, entitlement and backend send path
+    /// all have to be right for it to arrive). Deliberately omitted from
+    /// the original iOS admin port because no alerts stack existed yet.
+    static func sendTestPush(baseUrl: String, token: String, deviceId: String) async throws -> AdminTestPushResult {
+        struct Body: Encodable { let deviceId: String }
+        let data = try await post("\(baseUrl)/admin/test-push", body: JSONEncoder().encode(Body(deviceId: deviceId)), token: token)
+        return try decoder.decode(AdminTestPushResult.self, from: data)
+    }
+
     private static func get(_ urlString: String, token: String) async throws -> Data {
         guard let url = URL(string: urlString) else { throw AdminRequestError(message: "Bad URL") }
         var request = URLRequest(url: url)

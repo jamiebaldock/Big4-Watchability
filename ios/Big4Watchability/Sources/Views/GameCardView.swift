@@ -20,8 +20,13 @@ struct GameCardView: View {
     var showScore: Bool = true
     var onTap: () -> Void = {}
     var onWatchHighlights: (String) -> Void = { _ in }
+    // The per-game alert bell, matching GameCard.kt's showBell: only the
+    // Games tab passes true. Starred/History/Favorites leave it off so those
+    // tiles don't show a control that would be meaningless there.
+    var showBell: Bool = false
 
     @Environment(\.appTheme) private var theme
+    @ObservedObject private var alerts = AlertsStore.shared
     @State private var showConfetti = false
 
     var body: some View {
@@ -50,6 +55,21 @@ struct GameCardView: View {
                 }
                 Spacer()
                 StatusIndicatorView(game: game)
+                // Same three conditions Android applies: only where the
+                // caller asked for it, only with a real ESPN event id to
+                // subscribe, and never on a final game - there's nothing
+                // left to alert on once it's over.
+                if showBell, let eventId = game.eventId, game.stt != .final {
+                    let isBelled = alerts.isBelled(eventId: eventId)
+                    Button {
+                        Task { await AlertsViewModel.toggleBell(for: game) }
+                    } label: {
+                        Image(systemName: isBelled ? "bell.fill" : "bell")
+                            .foregroundStyle(isBelled ? AppColors.tierInstantClassic : theme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 10)
+                }
                 Button(action: onToggleStar) {
                     Image(systemName: isStarred ? "star.fill" : "star")
                         .foregroundStyle(isStarred ? AppColors.tierInstantClassic : theme.textMuted)

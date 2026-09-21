@@ -7,6 +7,7 @@ import SwiftUI
 // extends its window by simple chunked fetches instead - see that file).
 struct GamesView: View {
     @StateObject private var viewModel = GamesViewModel()
+    @ObservedObject private var push = PushNotificationManager.shared
     @ObservedObject private var favorites = FavoritesStore.shared
     @ObservedObject private var appSettings = AppSettingsStore.shared
     @ObservedObject private var weightsStore = RubricWeightsStore.shared
@@ -27,6 +28,21 @@ struct GamesView: View {
     @State private var showCalendar = false
 
     private var allLeagues: Bool { appSettings.isAllLeaguesSelected }
+
+    /// Consumes a pending alert deep link: switch league if the alert names a
+    /// different one, then jump to the game's own day. Cleared up front so a
+    /// second tap on the same game still re-triggers, and so the two call
+    /// sites (`.task` and `.onChange`) can't both act on one link.
+    private func consumeDeepLink() async {
+        guard let link = push.pendingDeepLink else { return }
+        push.pendingDeepLink = nil
+        if let league = link.leagueGroup, league != viewModel.leagueGroup {
+            viewModel.leagueGroup = league
+        }
+        if let utc = link.tipoffUtc, let tipoff = GameCardView.parseUtc(utc) {
+            await viewModel.jumpToDate(tipoff, allLeagues: allLeagues)
+        }
+    }
 
     var body: some View {
         NavigationStack {
@@ -92,12 +108,26 @@ struct GamesView: View {
             }
             .toolbarBackground(theme.backgroundBase, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .task { await viewModel.load(allLeagues: allLeagues) }
+            .task {
+                await viewModel.load(allLeagues: allLeagues)
+                // Also consumed here, not just in the onChange below: if the
+                // notification is tapped while another tab is showing, the
+                // link is already set by the time this view first appears, so
+                // the onChange never fires for it.
+                await consumeDeepLink()
+            }
             .onChange(of: viewModel.leagueGroup) { _ in
                 Task { await viewModel.load(allLeagues: allLeagues) }
             }
             .onChange(of: appSettings.isAllLeaguesSelected) { _ in
                 Task { await viewModel.load(allLeagues: allLeagues) }
+            }
+            // A tapped alert deep-links here. RootView has already switched
+            // to this tab; consuming the link is GamesView's job because it
+            // owns the GamesViewModel that knows how to jump. Cleared
+            // immediately so a second tap on the same game still works.
+            .onChange(of: push.pendingDeepLink) { _ in
+                Task { await consumeDeepLink() }
             }
             .sheet(isPresented: $showCalendar) {
                 SeasonCalendarView(
@@ -387,7 +417,10 @@ private struct DayGamesListView: View {
                             isStarred: starred.isStarred(game),
                             onToggleStar: { starred.toggle(game) },
                             onTap: { onTap(game) },
-                            onWatchHighlights: onWatchHighlights
+                            onWatchHighlights: onWatchHighlights,
+                            // Games is the only tab with the bell, matching
+                            // Android's showBell usage.
+                            showBell: true
                         )
                     }
                 }

@@ -1,10 +1,10 @@
 import SwiftUI
 
 // Swift mirror of a first slice of SettingsScreen.kt - see AppSettingsKeys.swift
-// for which AppSettings.kt fields are wired up so far vs. still to come
-// (enabledLeagues/isAllLeaguesSelected's "All Leagues" merge, alerts config,
-// admin PIN entry, and the About/Player Hater Mode easter egg are separate
-// future screens, not toggles here).
+// for which AppSettings.kt fields are wired up here as toggles. Alerts,
+// Rubric Weights, admin PIN entry and the About/Player Hater Mode easter egg
+// all live behind their own screens rather than as rows in this list, the
+// same split SettingsScreen.kt uses.
 struct SettingsView: View {
     @Environment(\.appTheme) private var theme
     @AppStorage(AppSettingsKeys.showNumericScore) private var showNumericScore = true
@@ -54,14 +54,12 @@ struct SettingsView: View {
                     NavigationLink("Rubric Weights") {
                         RubricWeightsView()
                     }
+                    NavigationLink("Alerts") {
+                        AlertsSettingsView()
+                    }
                     NavigationLink("About") {
                         AboutView()
                     }
-                }
-                Section {
-                    Text("Alerts are coming in a later build.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
                 }
             }
             .listStyle(.plain)

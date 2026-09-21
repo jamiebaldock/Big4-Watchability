@@ -90,6 +90,26 @@ struct AboutView: View {
 
                 Divider()
 
+                // Matches the conditional "Ad privacy options" row Android's
+                // AboutScreen.kt gained with the real-AdMob switch: only
+                // shown where a privacy-options form actually exists (i.e.
+                // GDPR/UK regions), since tapping it anywhere else does
+                // nothing at all.
+                if AdsConsentManager.shared.isPrivacyOptionsRequired {
+                    Button {
+                        AdsConsentManager.shared.presentPrivacyOptions()
+                    } label: {
+                        HStack {
+                            Text("Ad privacy options")
+                            Spacer()
+                            Image(systemName: "hand.raised")
+                        }
+                    }
+                    .padding(.vertical, 12)
+
+                    Divider()
+                }
+
                 Link(destination: URL(string: "mailto:\(contactEmail)")!) {
                     HStack {
                         VStack(alignment: .leading) {

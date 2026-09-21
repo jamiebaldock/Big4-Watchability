@@ -1,8 +1,8 @@
 import SwiftUI
 
 // Swift mirror of AdminDashboardScreen.kt - hidden operational page (About
-// screen's 12x title tap -> AdminPinView -> here). Test-push section
-// deliberately omitted, see AdminViewModel.swift's header comment.
+// screen's 12x title tap -> AdminPinView -> here), including the test-push
+// button added with the 2026-09-21 Alerts port.
 struct AdminDashboardView: View {
     @ObservedObject var viewModel: AdminViewModel
     @Environment(\.dismiss) private var dismiss
@@ -66,6 +66,28 @@ struct AdminDashboardView: View {
                     Text("Last 7 days — sent \(stats.pushStats.sentLastNDays), delivered \(stats.pushStats.deliveredLastNDays), failed \(stats.pushStats.failedLastNDays)")
                         .foregroundStyle(stats.pushStats.failedLastNDays > 0 ? .red : .secondary)
                         .font(.caption)
+
+                    Button {
+                        viewModel.sendTestPush()
+                    } label: {
+                        HStack {
+                            Text("Send test push to this device")
+                            Spacer()
+                            if viewModel.testPushState.isInFlight {
+                                ProgressView()
+                            }
+                        }
+                    }
+                    .disabled(viewModel.testPushState.isInFlight)
+
+                    switch viewModel.testPushState {
+                    case .idle, .inFlight:
+                        EmptyView()
+                    case .sent(let message):
+                        Text(message).font(.caption).foregroundStyle(.green)
+                    case .failed(let message):
+                        Text(message).font(.caption).foregroundStyle(.red)
+                    }
                 }
 
                 Section("Backend (Render)") {
