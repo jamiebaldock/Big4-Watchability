@@ -209,17 +209,26 @@ async function notifyDevice(device: AlertDeviceRow, game: GameJson, body: string
   // (any earlier tick that also crossed its bar) never gets a second push.
   if (!claimAlertSend(device.device_id, game.id, "close_swing")) return;
 
-  const results = await sendPush([device.fcm_token], {
-    title: `${game.a} @ ${game.h}`,
-    body,
-    eventId: game.id,
-    // Deep-link data: which league/day to land the tap on (mobile's
-    // AlertsFirebaseMessagingService reads these off the intent to jump
-    // straight to this game's tile instead of just opening the app on
-    // whatever tab/day it last had selected).
-    lg: game.lg,
-    utc: game.utc
-  });
+  const title = `${game.a} @ ${game.h}`;
+  const results = await sendPush(
+    [device.fcm_token],
+    {
+      title,
+      body,
+      eventId: game.id,
+      // Deep-link data: which league/day to land the tap on (mobile's
+      // AlertsFirebaseMessagingService reads these off the intent to jump
+      // straight to this game's tile instead of just opening the app on
+      // whatever tab/day it last had selected).
+      lg: game.lg,
+      utc: game.utc
+    },
+    // iOS-only: "in_app" is the explicit don't-interrupt-me choice, so it
+    // gets a silent push and the app draws its own banner. Every other
+    // delivery pref gets a real alert payload. Android ignores this
+    // entirely and keeps deciding client-side. See fcm.ts's sendPush doc.
+    { apnsAlert: device.delivery === "in_app" ? null : { title, body } }
+  );
   for (const result of results) {
     recordAlertOutcome(device.device_id, game.id, "close_swing", result.ok);
     if (!result.ok && result.errorCode && DEAD_TOKEN_CODES.has(result.errorCode)) {

@@ -321,13 +321,22 @@ export async function sendAdminTestPush(deviceId: string): Promise<AdminTestPush
     throw new AdminBadRequestError("no games scheduled today in any league to use as a test target");
   }
 
-  const results = await sendPush([fcmToken], {
-    title: `${target.a} @ ${target.h}`,
-    body: "Test push - tap to verify deep-linking.",
-    eventId: target.id,
-    lg: target.lg,
-    utc: target.utc,
-  });
+  const title = `${target.a} @ ${target.h}`;
+  const body = "Test push - tap to verify deep-linking.";
+  const results = await sendPush(
+    [fcmToken],
+    {
+      title,
+      body,
+      eventId: target.id,
+      lg: target.lg,
+      utc: target.utc,
+    },
+    // Always a visible alert on iOS regardless of the device's delivery
+    // pref - the entire point of the test button is seeing it arrive, so a
+    // silent content-available push would make a working setup look broken.
+    { apnsAlert: { title, body } }
+  );
   const result = results[0];
   if (!result.ok) {
     if (result.errorCode && DEAD_TOKEN_CODES.has(result.errorCode)) {
