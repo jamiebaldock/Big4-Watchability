@@ -1,0 +1,25 @@
+// Target-scoped signing settings for the Big4Watchability app target ONLY.
+//
+// WHY THIS FILE EXISTS (2026-09-21, CI run #49):
+// build-ios-testflight.yml used to pass CODE_SIGN_STYLE,
+// PROVISIONING_PROFILE_SPECIFIER, CODE_SIGN_IDENTITY and DEVELOPMENT_TEAM as
+// arguments on the `xcodebuild archive` command line. Command-line build
+// settings are GLOBAL - they apply to every target in the build graph, not
+// just the app. That was harmless for eleven straight dispatches because the
+// project had no dependencies. The moment Firebase, GoogleMobileAds and UMP
+// were added, the archive failed with a wall of:
+//
+//   GoogleUtilities_GoogleUtilities-Environment does not support
+//   provisioning profiles ... but provisioning profile *** has been
+//   manually specified.
+//
+// Swift Package targets cannot take a provisioning profile, and there is no
+// way to scope a command-line setting to one target. An xcconfig attached to
+// a single target via XcodeGen's `configFiles` is scoped by construction, so
+// the package targets are left completely alone.
+//
+// THIS FILE IS INTENTIONALLY EMPTY IN THE REPOSITORY. The real values are
+// written into it at runtime by the TestFlight workflow, from GitHub
+// secrets, immediately before the archive step - they are never committed.
+// Leaving it empty also means the unsigned CI build (build-ios.yml, which
+// passes CODE_SIGNING_ALLOWED=NO) is entirely unaffected by it.

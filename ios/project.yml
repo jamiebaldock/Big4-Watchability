@@ -63,6 +63,13 @@ targets:
       path: Big4Watchability/Big4Watchability.entitlements
       properties:
         aps-environment: development
+    # Signing lives here, attached to this ONE target, rather than on
+    # xcodebuild's command line where it would apply to the SPM package
+    # targets too and fail the archive. See Signing.xcconfig's header.
+    # Empty in the repo; filled from secrets at archive time.
+    configFiles:
+      Debug: Big4Watchability/Signing.xcconfig
+      Release: Big4Watchability/Signing.xcconfig
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.nbawatchability.app
