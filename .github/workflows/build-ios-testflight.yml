@@ -97,8 +97,21 @@ jobs:
           PROVISIONING_PROFILE_SPECIFIER = ${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}
           CODE_SIGN_IDENTITY = Apple Distribution
           EOF
-          echo "=== signing xcconfig written (profile name masked by Actions) ==="
+          echo "=== signing xcconfig written (secret values masked by Actions) ==="
           cat Big4Watchability/Signing.xcconfig
+          # Direct evidence of what xcodebuild ACTUALLY resolves, rather than
+          # assuming the xcconfig won. Build settings resolve command line >
+          # target settings > xcconfig, and a target-level DEVELOPMENT_TEAM
+          # silently outranking this file is exactly what failed run #28.
+          # An empty value here means something above the xcconfig is
+          # winning again - look in project.yml's target settings first.
+          echo "=== resolved signing settings (Release) ==="
+          xcodebuild -showBuildSettings \
+            -project Big4Watchability.xcodeproj \
+            -scheme Big4Watchability \
+            -configuration Release \
+            -destination 'generic/platform=iOS' 2>/dev/null \
+            | grep -E "DEVELOPMENT_TEAM|CODE_SIGN_STYLE|PROVISIONING_PROFILE_SPECIFIER|CODE_SIGN_IDENTITY"
 
       - name: Archive (signed)
         run: |

@@ -77,8 +77,17 @@ targets:
         CURRENT_PROJECT_VERSION: "12"
         SWIFT_VERSION: "5.0"
         TARGETED_DEVICE_FAMILY: "1,2"
-        DEVELOPMENT_TEAM: ""
-        CODE_SIGN_STYLE: Automatic
+        # DEVELOPMENT_TEAM and CODE_SIGN_STYLE deliberately absent (run #28):
+        # Xcode resolves build settings command line > TARGET settings >
+        # xcconfig. While signing was passed on xcodebuild's command line
+        # these two were outranked and harmless, which is why an empty
+        # DEVELOPMENT_TEAM sat here for eleven green dispatches. Now that
+        # signing comes from Signing.xcconfig (a base configuration), a
+        # target-level DEVELOPMENT_TEAM: "" would OUTRANK it and blank the
+        # team out again - "Signing requires a development team".
+        # Leaving both unset lets the xcconfig own signing entirely, and
+        # costs the unsigned CI build nothing since it passes
+        # CODE_SIGNING_ALLOWED=NO anyway.
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # Apple's own error (90713) named this directly: an asset-catalog
         # app icon (ASSETCATALOG_COMPILER_APPICON_NAME above) also needs
