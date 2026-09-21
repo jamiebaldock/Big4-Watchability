@@ -80,7 +80,7 @@ jobs:
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp $PROFILE_PATH ~/Library/MobileDevice/Provisioning\ Profiles
 
-      # These four settings used to be passed on the xcodebuild command line
+      # These settings used to be passed on the xcodebuild command line
       # below. Command-line settings are global to every target, and Swift
       # Package targets cannot accept a provisioning profile - which broke
       # the archive outright the moment Firebase/GoogleMobileAds/UMP were
@@ -89,13 +89,14 @@ jobs:
       # xcconfig instead applies them to the app target alone and leaves the
       # package targets untouched. The file is committed empty; the real
       # values only ever exist here, at runtime, from secrets.
+      # CODE_SIGN_IDENTITY is NOT among them - XcodeGen's target-level preset
+      # outranks an xcconfig, so it lives in project.yml instead (run #29).
       - name: Write target-scoped signing config
         run: |
           cat > Big4Watchability/Signing.xcconfig <<EOF
           CODE_SIGN_STYLE = Manual
           DEVELOPMENT_TEAM = ${{ secrets.IOS_APPLE_TEAM_ID }}
           PROVISIONING_PROFILE_SPECIFIER = ${{ secrets.IOS_PROVISIONING_PROFILE_NAME }}
-          CODE_SIGN_IDENTITY = Apple Distribution
           EOF
           echo "=== signing xcconfig written (secret values masked by Actions) ==="
           cat Big4Watchability/Signing.xcconfig

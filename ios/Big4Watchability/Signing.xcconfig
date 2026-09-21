@@ -23,3 +23,11 @@
 // secrets, immediately before the archive step - they are never committed.
 // Leaving it empty also means the unsigned CI build (build-ios.yml, which
 // passes CODE_SIGNING_ALLOWED=NO) is entirely unaffected by it.
+
+// NOTE: CODE_SIGN_IDENTITY is deliberately NOT written here. XcodeGen adds a
+// target-level signing preset (CODE_SIGN_IDENTITY = iPhone Developer) and
+// target settings outrank an xcconfig, so setting it in this file has no
+// effect - proven by run #29, where this file said "Apple Distribution" and
+// xcodebuild still resolved "iPhone Developer". It lives in project.yml's
+// target settings instead, as an [sdk=iphoneos*] conditional. Only the two
+// values that are actually secret are written here.
