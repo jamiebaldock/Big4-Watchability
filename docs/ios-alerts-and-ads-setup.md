@@ -68,7 +68,25 @@ same poller.
 
 ---
 
-## B. Ads — two steps
+## B. Ads — DEFERRED (James's call, 2026-09-21)
+
+> **Decision: do not do section B until the app is ready to launch.**
+> Build 13 is confirmed working on device with Google's test ad IDs, which
+> is all that was needed to prove the banner renders and doesn't wreck the
+> layout. Wiring real ad units to an app that isn't publicly listed earns
+> nothing and only creates a window in which someone might tap their own
+> live ads.
+>
+> **This must be on the launch checklist, not left to memory.** Android
+> very nearly shipped this exact mistake: v3 went to the closed test with
+> test IDs and only got real ones in v4 on 2026-09-16. An App Store release
+> carrying test IDs would serve ads and earn **zero**.
+>
+> Test IDs are explicitly safe to ship — Google supports them in production
+> — so there is no policy risk in waiting. The only cost is revenue, and
+> there is none to lose until the app is live.
+
+### The two steps, for when it is time
 
 ### B1. Register an iOS app in the existing AdMob account
 
@@ -87,12 +105,20 @@ something like "iOS anchored banner".
 This gives you an **ad unit ID** of the form
 `ca-app-pub-6295039345620062/XXXXXXXXXX`.
 
-Send me both IDs. They replace two values:
+Send me both IDs. They replace three values (three, not two - there are now
+two separate paths writing the app id, after the build-12 launch crash):
 
 | Value | Where it lives |
 |---|---|
 | iOS App ID (`~`) | `INFOPLIST_KEY_GADApplicationIdentifier` in `ios/project.yml` |
+| iOS App ID (`~`) again | `APP_ID` in the `Force third-party Info.plist keys` postBuildScript, same file |
 | Banner unit ID (`/`) | `AdUnit.banner` in `ios/.../Ads/AdBannerView.swift` |
+
+Both app-id spots must change together. The PlistBuddy script exists because
+`INFOPLIST_KEY_GADApplicationIdentifier` could not be trusted to reach the
+built plist (it crashed build 12 on launch), and it overwrites whatever the
+build setting produced - so updating only the build setting would silently
+keep serving the test id.
 
 > **Ad unit IDs are per-platform.** Android's real IDs
 > (`...~3445511248` / `...​/5400756591`) cannot be reused here. Until B1/B2
