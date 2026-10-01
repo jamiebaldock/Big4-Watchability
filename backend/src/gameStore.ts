@@ -297,6 +297,26 @@ const statements = {
      VALUES (@eventId, @league, @leagueGroup, @away, @home, @awayLogo, @homeLogo, @tipoffUtc, @status, @updatedAt)`
   ),
   updateStatus: db.prepare(`UPDATE games SET status=?, updated_at=? WHERE event_id=? AND status != 'final'`),
+  // Companion to updateStatus, and for the same reason: upsertBaseEntry is
+  // INSERT OR IGNORE, so a field written at first sighting is frozen
+  // forever. Status was always understood to change; tipoff was treated as
+  // immutable, which is true for a regular-season game and false for any
+  // fixture that moves.
+  //
+  // The case that exposed it (2026-10-01): ESPN publishes playoff Game 3
+  // slots before the tipoff time is known - it depends on how Games 1-2 go -
+  // using a midnight-Eastern placeholder, then fills in the real time later.
+  // WNBA Round 1 Game 3 sat at 2026-10-01T04:00Z in our DB while ESPN had
+  // long since moved to 2026-10-02T01:00Z. 21 hours wrong, which for a
+  // viewer at UTC+10 is a whole day wrong. Same exposure for any postponed
+  // or rescheduled game in any league (NFL weather, MLB rain).
+  //
+  // Guards: never rewrite a final game's tipoff (history stays as it
+  // happened), and skip the write entirely when the value hasn't changed,
+  // so a routine scoreboard poll of an unchanged slate costs zero writes.
+  updateTipoffIfNotFinal: db.prepare(
+    `UPDATE games SET tipoff_utc=?, updated_at=? WHERE event_id=? AND status != 'final' AND tipoff_utc != ?`
+  ),
   setSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`),
   forceSetSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`),
   setFinalRubric: db.prepare(
@@ -411,7 +431,16 @@ export interface GameRow {
   nhlRubricInputs: NhlRubricInputs | null;
 }
 
-/** Creates the row if this eventId has never been seen before; a no-op otherwise - never touches an existing row's already-collected fields. */
+/**
+ * Creates the row if this eventId has never been seen before, and otherwise
+ * leaves every already-collected field alone - with the single exception of
+ * tipoff_utc, which is refreshed for any not-yet-final game (see
+ * statements.updateTipoffIfNotFinal for why).
+ *
+ * The refresh lives here rather than in the four league services that call
+ * this, so every league gets it without four separate call-site edits and
+ * without the chance of one being missed later.
+ */
 export function upsertBaseEntry(entry: {
   eventId: string;
   league: AnyLeague;
@@ -435,6 +464,10 @@ export function upsertBaseEntry(entry: {
     status: entry.status,
     updatedAt: now(),
   });
+  // No-op on the insert that just happened (values already match) and on
+  // every unchanged poll thereafter; only actually writes when ESPN has
+  // moved the game.
+  statements.updateTipoffIfNotFinal.run(entry.tipoffUtc, now(), entry.eventId, entry.tipoffUtc);
 }
 
 /** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */
