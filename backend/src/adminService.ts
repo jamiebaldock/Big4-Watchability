@@ -97,13 +97,19 @@ export async function getAdminStats(): Promise<AdminStats> {
     todayCount: getTodaySearchBudgetCount(),
     dailyCap: DAILY_SEARCH_BUDGET,
     budgetHistory: getSearchBudgetHistory(14),
-    // Basketball/MLB only - the three leagues with highlights search
-    // actually wired in live (NFL/NHL's own search is built but dormant,
-    // see nflGamesService.ts/nhlGamesService.ts).
+    // Every league whose highlights search is actually wired in. NFL was
+    // missing from this list long after its search went live, and NHL was
+    // added 2026-10-16 - which meant the one screen that would have shown
+    // either league silently failing just had no row for it at all. That is
+    // exactly how NFL's broken title predicate survived a whole season
+    // undetected, so new leagues belong here the moment their search is
+    // wired, not afterwards.
     lagPercentiles: {
       nba: getLagPercentiles("nba", "nba"),
       wnba: getLagPercentiles("wnba", "wnba"),
       mlb: getLagPercentiles("mlb", "mlb"),
+      nfl: getLagPercentiles("nfl", "nfl"),
+      nhl: getLagPercentiles("nhl", "nhl"),
     },
     outcomeCounts: getSearchOutcomeCounts(7),
     pushStats: getAlertDeliveryStats(7),

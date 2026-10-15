@@ -135,10 +135,26 @@ function toMlbGameJson(row: GameRow, status: "upcoming" | "live", q?: number, cl
  * pregame preview, final-rubric compute-once) and returns its GameJson - the
  * MLB analogue of soccerGamesService.ts's processSoccerEvent.
  */
-async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson> {
+// Returns null for a game that should not be stored or shown at all -
+// currently only the TBD-matchup guard inside. Mirrors gamesService.ts's
+// processEvent, which has had the same nullable return for the same reason.
+async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson | null> {
   const competition = event.competitions[0];
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
   const home = competition.competitors.find((c) => c.homeAway === "home")!;
+  // Postseason slots are published by ESPN before the matchup is decided,
+  // carrying literal "TBD" team names. Skipped entirely rather than stored
+  // as a placeholder, because upsertBaseEntry is INSERT OR IGNORE: a row
+  // created now would keep "TBD @ TBD" as its permanent team names even
+  // after ESPN fills the real teams in, and would then burn YouTube search
+  // quota hunting for highlights of a game between TBD and TBD (two such
+  // rows, each with 2 wasted checks, were sitting in the Admin page's
+  // missing-highlights list on 2026-10-16 - that is what exposed this).
+  // Once ESPN resolves the matchup the same event comes through normally on
+  // a later request. gamesService.ts has had this guard since the Summer
+  // League bracket hit the identical problem; the other three leagues never
+  // got it.
+  if (away.team.displayName === "TBD" || home.team.displayName === "TBD") return null;
   const status = mapMlbEspnState(competition.status.type.state);
 
   upsertBaseEntry({
@@ -237,7 +253,8 @@ export async function getMlbGamesForDate(date: string): Promise<GameJson[]> {
   const results: GameJson[] = [];
   for (const event of events) {
     const processStart = Date.now();
-    results.push(await processMlbEvent(event));
+    const game = await processMlbEvent(event);
+    if (game) results.push(game);
     const processMs = Date.now() - processStart;
     console.log(`[PERF] processMlbEvent took ${processMs}ms`);
   }
@@ -260,7 +277,8 @@ export async function getMlbTeamSchedule(teamId: string): Promise<GameJson[]> {
   const events = (await fetchMlbTeamSchedule(teamId)).filter(isRealSeasonEvent);
   const results: GameJson[] = [];
   for (const event of events) {
-    results.push(await processMlbEvent(event));
+    const game = await processMlbEvent(event);
+    if (game) results.push(game);
   }
   return results;
 }

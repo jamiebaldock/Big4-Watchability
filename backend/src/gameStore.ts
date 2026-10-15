@@ -317,6 +317,21 @@ const statements = {
   updateTipoffIfNotFinal: db.prepare(
     `UPDATE games SET tipoff_utc=?, updated_at=? WHERE event_id=? AND status != 'final' AND tipoff_utc != ?`
   ),
+  // Repairs rows whose team names were frozen as the literal string "TBD".
+  // The four league services now refuse to store a TBD matchup at all, so
+  // nothing new can land in this state - but rows created before that guard
+  // existed are stuck, and they are real played games (two MLB postseason
+  // ones were showing as "TBD @ TBD" in the app on 2026-10-16).
+  //
+  // Deliberately NOT guarded on status: unlike a tipoff, repairing these
+  // rewrites nothing meaningful about history - the WHERE clause only ever
+  // matches the literal placeholder, never a real team name, so a correct
+  // row cannot be touched by this no matter what ESPN sends later. Self-heals
+  // the moment the resolved matchup comes through on any normal request.
+  repairTbdTeamNames: db.prepare(
+    `UPDATE games SET away=?, home=?, away_logo=?, home_logo=?, updated_at=?
+     WHERE event_id=? AND (away='TBD' OR home='TBD') AND ? != 'TBD' AND ? != 'TBD'`
+  ),
   setSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`),
   forceSetSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`),
   setFinalRubric: db.prepare(
@@ -468,6 +483,16 @@ export function upsertBaseEntry(entry: {
   // every unchanged poll thereafter; only actually writes when ESPN has
   // moved the game.
   statements.updateTipoffIfNotFinal.run(entry.tipoffUtc, now(), entry.eventId, entry.tipoffUtc);
+  statements.repairTbdTeamNames.run(
+    entry.away,
+    entry.home,
+    entry.awayLogo ?? null,
+    entry.homeLogo ?? null,
+    now(),
+    entry.eventId,
+    entry.away,
+    entry.home
+  );
 }
 
 /** Status changes freely (upcoming -> live -> final) until final, which is sticky - a completed game's status is never downgraded. */

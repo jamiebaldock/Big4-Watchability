@@ -16,6 +16,14 @@
 import { checkPendingHighlights } from "./gamesService";
 import { checkPendingMlbHighlights } from "./mlbGamesService";
 import { checkPendingNflHighlights } from "./nflGamesService";
+// Wired in 2026-10-16. The search itself was built back in July with its
+// channel id and both title conventions confirmed against real uploads, then
+// deliberately left dormant as a staged rollout - and never switched on. The
+// NHL season starting made that visible: every NHL game in the Admin page's
+// missing-highlights list read "0 check(s), last never", because nothing
+// anywhere called this. Quota is not a concern - 20/90 used the day this
+// landed, with a 14-day peak of 63.
+import { checkPendingNhlHighlights } from "./nhlGamesService";
 
 const POLL_INTERVAL_MS = 30 * 60 * 1000;
 
@@ -34,6 +42,11 @@ async function pollOnce(): Promise<void> {
     await checkPendingNflHighlights();
   } catch (err) {
     console.error("highlightsPoller: checkPendingNflHighlights failed", err);
+  }
+  try {
+    await checkPendingNhlHighlights();
+  } catch (err) {
+    console.error("highlightsPoller: checkPendingNhlHighlights failed", err);
   }
 }
 

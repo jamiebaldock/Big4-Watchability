@@ -75,7 +75,33 @@ function channelIdFor(league: HighlightsLeague): string {
 // so they keep requiring it.
 function requiredTitlePhraseFor(league: HighlightsLeague): string {
   if (league === "nhl") return "HIGHLIGHTS";
-  if (league === "nfl") return "VS";
+  // "VS" until 2026-10-16, taken from PRESEASON titles ("Detroit Lions vs.
+  // Cincinnati Bengals | 2026 Preseason Week 1") because no regular-season
+  // uploads existed to check when NFL was built - the comment on
+  // NFL_YOUTUBE_CHANNEL_ID above flagged it as needing another look, and it
+  // did. Real regular-season titles were checked directly against @NFL's
+  // channel on 2026-10-16, 11 of them, and every single one carries the
+  // literal phrase "Game Highlights":
+  //   "Buffalo Bills vs Los Angeles Rams Game Highlights | 2026 NFL Season Week 5"
+  //   "Detroit Lions vs. Arizona Cardinals Game Highlights | NFL 2026 Week 5"
+  //   "Chicago Bears vs. Green Bay Packers Game Highlights | NFL 2026 Season Week 5"
+  // (the trailing part varies - "2026 NFL Season Week N" / "NFL 2026 Week N" /
+  // "NFL 2026 Season Week N" - so only the "Game Highlights" phrase is safe to
+  // require). None contain "FULL GAME HIGHLIGHTS", so the generic phrase below
+  // would never match either.
+  //
+  // "VS" was not merely too weak, it was dangerous: @NFL posts a PREVIEW per
+  // fixture every week - "Houston Texans vs Jacksonville Jaguars | 2026 Week 6
+  // Game Preview", 8:51 long - which carries both team nicknames, contains
+  // "vs", and sits under MAX_HIGHLIGHTS_SECONDS. It satisfied every condition
+  // the matcher checked. Requiring "GAME HIGHLIGHTS" separates the two
+  // cleanly, since a preview says "Game Preview".
+  //
+  // Known trade-off: preseason titles carry no "Highlights" wording at all, so
+  // preseason games stop matching. That is the right way round - 18 regular
+  // season weeks plus playoffs beat 3 preseason weeks, and the preseason
+  // videos are full replays rather than highlight reels anyway.
+  if (league === "nfl") return "GAME HIGHLIGHTS";
   return "FULL GAME HIGHLIGHTS";
 }
 
