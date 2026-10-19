@@ -73,8 +73,8 @@ function channelIdFor(league: HighlightsLeague): string {
 // names, which is what's required below instead now. NBA/WNBA/MLB's
 // confirmed real titles do contain the full "FULL GAME HIGHLIGHTS" phrase,
 // so they keep requiring it.
-function requiredTitlePhraseFor(league: HighlightsLeague): string {
-  if (league === "nhl") return "HIGHLIGHTS";
+function requiredTitlePatternFor(league: HighlightsLeague): RegExp {
+  if (league === "nhl") return /HIGHLIGHTS/;
   // "VS" until 2026-10-16, taken from PRESEASON titles ("Detroit Lions vs.
   // Cincinnati Bengals | 2026 Preseason Week 1") because no regular-season
   // uploads existed to check when NFL was built - the comment on
@@ -101,8 +101,29 @@ function requiredTitlePhraseFor(league: HighlightsLeague): string {
   // preseason games stop matching. That is the right way round - 18 regular
   // season weeks plus playoffs beat 3 preseason weeks, and the preseason
   // videos are full replays rather than highlight reels anyway.
-  if (league === "nfl") return "GAME HIGHLIGHTS";
-  return "FULL GAME HIGHLIGHTS";
+  if (league === "nfl") return /GAME HIGHLIGHTS/;
+  // A regex rather than a plain substring because MLB inserts the game
+  // number into the phrase for postseason series: the real @MLB uploads for
+  // the 2026 ALCS are "RAYS vs. GUARDIANS: ALCS Full Game Highlights
+  // (October 18)" AND "...: ALCS Full Game 4 Highlights (October 17)". The
+  // second splits the literal phrase in half, so a contiguous
+  // "FULL GAME HIGHLIGHTS" check silently missed every numbered game in the
+  // series. The optional number is applied to NBA/WNBA too, which use the
+  // same convention for their own playoff series.
+  return /FULL GAME(?: \d+)? HIGHLIGHTS/;
+}
+
+// MLB's postseason reels genuinely run longer than every other league's: the
+// two real ALCS uploads above are 23:55 and 21:48, both over the 20-minute
+// cap that had been applied to all leagues, so both were rejected on length
+// even before the title check. That cap was always flagged in the comment
+// below as unverified for MLB - this is the real data it was waiting for.
+// 30 min keeps the false-positive protection meaningful (a full baseball
+// broadcast replay is 3+ hours, nowhere near this) while admitting a real
+// postseason package.
+function maxHighlightsSecondsFor(league: HighlightsLeague): number {
+  if (league === "mlb") return 30 * 60;
+  return MAX_HIGHLIGHTS_SECONDS;
 }
 
 // search.list has its own dedicated daily quota bucket (separate from the
@@ -375,7 +396,7 @@ export async function searchHighlightsVideo(
 
     const upperTitle = title.toUpperCase();
     const isMatch =
-      upperTitle.includes(requiredTitlePhraseFor(league)) &&
+      requiredTitlePatternFor(league).test(upperTitle) &&
       upperTitle.includes(awayNickname.toUpperCase()) &&
       upperTitle.includes(homeNickname.toUpperCase());
 
@@ -391,7 +412,7 @@ export async function searchHighlightsVideo(
 
   for (const candidate of textMatches) {
     const meta = videoMeta.get(candidate.videoId);
-    if (meta && meta.embeddable && meta.seconds <= MAX_HIGHLIGHTS_SECONDS) return candidate;
+    if (meta && meta.embeddable && meta.seconds <= maxHighlightsSecondsFor(league)) return candidate;
   }
 
   return null;
