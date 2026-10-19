@@ -317,7 +317,8 @@ const statements = {
   updateTipoffIfNotFinal: db.prepare(
     `UPDATE games SET tipoff_utc=?, updated_at=? WHERE event_id=? AND status != 'final' AND tipoff_utc != ?`
   ),
-  // Repairs rows whose team names were frozen as the literal string "TBD".
+  // Repairs rows whose team names were frozen as a PLACEHOLDER rather than a
+  // real team - see isPlaceholderTeamName below for the two shapes ESPN uses.
   // The four league services now refuse to store a TBD matchup at all, so
   // nothing new can land in this state - but rows created before that guard
   // existed are stuck, and they are real played games (two MLB postseason
@@ -328,9 +329,11 @@ const statements = {
   // matches the literal placeholder, never a real team name, so a correct
   // row cannot be touched by this no matter what ESPN sends later. Self-heals
   // the moment the resolved matchup comes through on any normal request.
-  repairTbdTeamNames: db.prepare(
+  repairPlaceholderTeamNames: db.prepare(
     `UPDATE games SET away=?, home=?, away_logo=?, home_logo=?, updated_at=?
-     WHERE event_id=? AND (away='TBD' OR home='TBD') AND ? != 'TBD' AND ? != 'TBD'`
+     WHERE event_id=?
+       AND (away='TBD' OR home='TBD' OR away LIKE '%/%' OR home LIKE '%/%')
+       AND ? NOT LIKE '%/%' AND ? NOT LIKE '%/%' AND ? != 'TBD' AND ? != 'TBD'`
   ),
   setSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=? AND season_stage_label IS NULL`),
   forceSetSeasonStageLabel: db.prepare(`UPDATE games SET season_stage_label=?, updated_at=? WHERE event_id=?`),
@@ -447,6 +450,30 @@ export interface GameRow {
 }
 
 /**
+ * True when ESPN gave us a stand-in rather than a real team, for a fixture
+ * whose participant isn't decided yet. Two shapes seen in the wild, both in
+ * the 2026 postseason:
+ *
+ *   "TBD"             - the slot exists but neither side is known
+ *   "Dream/Mystics"   - the winner of that series, named as both candidates
+ *
+ * The slash form is safe to detect this way: no real team in any of the five
+ * leagues has a "/" in its display name. Deliberately not a list of known
+ * placeholder strings - ESPN invents these per round, and a list would need
+ * updating every postseason.
+ *
+ * Callers use this twice over: the league services refuse to STORE a game
+ * with a placeholder participant (upsertBaseEntry is INSERT OR IGNORE, so a
+ * row created now would keep the stand-in as its permanent name), and
+ * upsertBaseEntry repairs any row that was frozen that way before this
+ * existed.
+ */
+export function isPlaceholderTeamName(name: string): boolean {
+  const trimmed = name.trim();
+  return trimmed.toUpperCase() === "TBD" || trimmed.includes("/");
+}
+
+/**
  * Creates the row if this eventId has never been seen before, and otherwise
  * leaves every already-collected field alone - with the single exception of
  * tipoff_utc, which is refreshed for any not-yet-final game (see
@@ -483,13 +510,15 @@ export function upsertBaseEntry(entry: {
   // every unchanged poll thereafter; only actually writes when ESPN has
   // moved the game.
   statements.updateTipoffIfNotFinal.run(entry.tipoffUtc, now(), entry.eventId, entry.tipoffUtc);
-  statements.repairTbdTeamNames.run(
+  statements.repairPlaceholderTeamNames.run(
     entry.away,
     entry.home,
     entry.awayLogo ?? null,
     entry.homeLogo ?? null,
     now(),
     entry.eventId,
+    entry.away,
+    entry.home,
     entry.away,
     entry.home
   );

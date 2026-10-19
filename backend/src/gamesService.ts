@@ -1,6 +1,7 @@
 import { EspnEvent, League, fetchCalendarDates, fetchScoreboard, fetchSummary, fetchTeamSchedule, toEspnDate } from "./espnClient";
 import { deriveCompetitionLabel, mapEspnState, mapEventToGame } from "./gameMapper";
 import {
+  isPlaceholderTeamName,
   FinalRubric,
   GameRow,
   canSpendSearchQuota,
@@ -327,15 +328,16 @@ async function processEvent(league: League, leagueGroup: BasketballLeagueGroup, 
   const competition = event.competitions[0];
   const away = competition.competitors.find((c) => c.homeAway === "away")!;
   const home = competition.competitors.find((c) => c.homeAway === "home")!;
-  // Summer League's bracket rounds get scheduled on ESPN before the earlier
-  // group-stage games that decide the actual matchup finish - those slots
-  // carry literal "TBD" team names until ESPN fills them in. Skipped
-  // entirely (not even upserted into gameStore) rather than shown as a
-  // placeholder tile, since upsertBaseEntry's insert-once behavior would
-  // otherwise freeze "TBD" as this game's permanent team names, and there's
-  // nothing real to show anyway - once ESPN resolves the real matchup, this
-  // same event naturally starts coming through normally on a later request.
-  if (away.team.displayName === "TBD" || home.team.displayName === "TBD") return null;
+  // ESPN schedules a bracket slot before the games that decide who plays in
+  // it have finished, naming the participant with a stand-in - "TBD" for
+  // Summer League's rounds, "Dream/Mystics" (the two candidates) for the
+  // 2026 WNBA semifinals. Skipped entirely rather than stored, because
+  // upsertBaseEntry is INSERT OR IGNORE: a row created now would keep the
+  // stand-in as its permanent team name even after ESPN resolves the
+  // matchup. There is nothing real to show either way, and once resolved the
+  // same event comes through normally on a later request.
+  // See isPlaceholderTeamName (gameStore.ts) for both shapes.
+  if (isPlaceholderTeamName(away.team.displayName) || isPlaceholderTeamName(home.team.displayName)) return null;
   const status = mapEspnState(competition.status.type.state);
 
   upsertBaseEntry({

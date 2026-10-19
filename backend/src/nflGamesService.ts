@@ -18,6 +18,7 @@
 // highlightsPoller.ts's pollOnce() alongside the other leagues.
 import { toEspnDate } from "./espnClient";
 import {
+  isPlaceholderTeamName,
   GameRow,
   canSpendSearchQuota,
   getFinalNflGamesMissingHighlights,
@@ -157,7 +158,7 @@ async function processNflEvent(event: EspnNflEvent): Promise<GameJson | null> {
   // a later request. gamesService.ts has had this guard since the Summer
   // League bracket hit the identical problem; the other three leagues never
   // got it.
-  if (away.team.displayName === "TBD" || home.team.displayName === "TBD") return null;
+  if (isPlaceholderTeamName(away.team.displayName) || isPlaceholderTeamName(home.team.displayName)) return null;
   const status = mapNflEspnState(competition.status.type.state);
 
   upsertBaseEntry({

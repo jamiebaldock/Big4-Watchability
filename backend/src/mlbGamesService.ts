@@ -23,6 +23,7 @@
 // checkPendingHighlights() call.
 import { toEspnDate } from "./espnClient";
 import {
+  isPlaceholderTeamName,
   GameRow,
   canSpendSearchQuota,
   getFinalMlbGamesMissingHighlights,
@@ -154,7 +155,7 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson | null> {
   // a later request. gamesService.ts has had this guard since the Summer
   // League bracket hit the identical problem; the other three leagues never
   // got it.
-  if (away.team.displayName === "TBD" || home.team.displayName === "TBD") return null;
+  if (isPlaceholderTeamName(away.team.displayName) || isPlaceholderTeamName(home.team.displayName)) return null;
   const status = mapMlbEspnState(competition.status.type.state);
 
   upsertBaseEntry({
