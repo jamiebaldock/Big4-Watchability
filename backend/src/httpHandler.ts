@@ -1,5 +1,5 @@
 import { dateStringsBetween } from "./dateRange";
-import { earliestGameDate, getMostRecentFinalsEnd } from "./gameStore";
+import { earliestGameDate, getMostRecentFinalsEnd, isPlaceholderTeamName } from "./gameStore";
 import { getGameDetail } from "./gameDetailService";
 import { getGamesForDate, getNextScheduledDate, getTeamSchedule } from "./gamesService";
 import { getHistory, HistoryResult } from "./historyService";
@@ -109,7 +109,22 @@ export async function getGamesForDateAnySport(date: string, leagueGroup: LeagueG
   const cacheable = isSafelyPastDate(date);
   if (cacheable) {
     const cached = loadLeagueCache<GameJson[]>("scheduleDay", leagueGroup, date);
-    if (cached) return cached;
+    // A cached day is only trustworthy if nothing in it is still a
+    // placeholder matchup. This cache never expires, so a day that happened
+    // to be fetched while ESPN was still calling a playoff participant "TBD"
+    // or "Dream/Mystics" would otherwise serve that stand-in forever - and
+    // worse, it short-circuits before processEvent, so neither the league
+    // services' placeholder guard nor gameStore's in-place repair ever gets
+    // a chance to run. That is exactly why MLB's Oct 6-8 postseason games
+    // were still reading "TBD @ TBD" days after both of those landed.
+    //
+    // Falling through re-fetches the day from ESPN (which has the resolved
+    // matchup by then), repairs the stored rows, and overwrites the cache
+    // entry with the real names. Self-limiting: once a day is clean it
+    // caches normally and is never re-fetched again.
+    if (cached && !cached.some((g) => isPlaceholderTeamName(g.a) || isPlaceholderTeamName(g.h))) {
+      return cached;
+    }
   } else {
     const liveKey = `${leagueGroup}:${date}`;
     const liveCached = liveGamesCache.get(liveKey);

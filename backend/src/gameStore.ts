@@ -1512,6 +1512,27 @@ export function updateTipoffTime(eventId: string, newTipoffUtc: string): void {
   db.prepare(`UPDATE games SET tipoff_utc = ? WHERE event_id = ? AND tipoff_utc IS NOT NULL`).run(newTipoffUtc, eventId);
 }
 
+/**
+ * Every (leagueGroup, date) that still has a game stored under a placeholder
+ * team name - the input to the startup repair sweep in devServer.ts.
+ *
+ * Returns the game's LOCAL-to-ESPN date as stored, which is what
+ * getGamesForDateAnySport expects. Naturally empties itself: once a day is
+ * re-fetched and repaired there is nothing left for this to return, so the
+ * sweep stops doing any work without needing a migration flag.
+ */
+export function getDatesWithPlaceholderTeams(): Array<{ leagueGroup: string; date: string }> {
+  return db
+    .prepare(
+      `SELECT DISTINCT league_group AS leagueGroup, substr(tipoff_utc, 1, 10) AS date
+         FROM games
+        WHERE away = 'TBD' OR home = 'TBD' OR away LIKE '%/%' OR home LIKE '%/%'
+        ORDER BY date DESC
+        LIMIT 40`
+    )
+    .all() as Array<{ leagueGroup: string; date: string }>;
+}
+
 export function closeDb(): void {
   db.close();
 }

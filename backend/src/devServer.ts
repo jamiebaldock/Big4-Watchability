@@ -4,6 +4,7 @@ import {
   BadRequestError,
   getCurrentSeasonStartForLeagueGroup,
   getGameDetailForEvent,
+  getGamesForDateAnySport,
   getHistoryForRange,
   getNewsForLeagueGroup,
   getNextGameDateForLeagueGroup,
@@ -16,6 +17,8 @@ import {
   getTeamScheduleForLeagueGroup,
   getTeamsForLeagueGroup,
 } from "./httpHandler";
+import { getDatesWithPlaceholderTeams } from "./gameStore";
+import type { LeagueGroup } from "./types";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import {
   AdminBadRequestError,
@@ -392,4 +395,54 @@ app.listen(PORT, () => {
   // period (overnight + multiple clean checks), so the poller's periodic
   // 5-league ESPN hit is safe to resume.
   startAlertsPoller();
+  repairPlaceholderDays();
 });
+
+/**
+ * One-shot sweep for days still holding a placeholder matchup ("TBD @ TBD",
+ * "New York Liberty @ Dream/Mystics"). Those rows are frozen by
+ * upsertBaseEntry's INSERT OR IGNORE, and the permanent scheduleDay cache
+ * short-circuits before the code that would repair them, so nothing fixes
+ * them until that exact day is requested again - which, for a postseason day
+ * a fortnight ago, is never.
+ *
+ * Re-requesting the day is all it takes: httpHandler now refuses to trust a
+ * cached day containing a placeholder, so this falls through to ESPN (which
+ * has the resolved matchup), repairs the stored rows, and rewrites the cache.
+ *
+ * Deliberately not a run-once migration flag - it is driven by whether any
+ * placeholder rows actually exist, so it self-extinguishes and also covers
+ * placeholders created in future postseasons. Bounded to 40 days, sequential
+ * with a small gap, and every failure swallowed: this is cleanup, and it must
+ * never delay or destabilise startup.
+ */
+async function repairPlaceholderDays(): Promise<void> {
+  const targets = getDatesWithPlaceholderTeams();
+  if (targets.length === 0) return;
+  console.log(`[repair] ${targets.length} day(s) still hold a placeholder matchup - re-fetching`);
+  // Each target is widened to the day either side. The stored date comes
+  // from tipoff_utc, but getGamesForDateAnySport keys on ESPN's US-Eastern
+  // scoreboard day - for a late-evening US game those are different days, so
+  // fetching only the UTC date would re-fetch the wrong scoreboard and
+  // repair nothing. Three days per target is cheap, one-off, and removes the
+  // need to reason about which side of midnight any given game falls on.
+  const seen = new Set<string>();
+  for (const { leagueGroup, date } of targets) {
+    for (const offset of [-1, 0, 1]) {
+      const d = new Date(`${date}T12:00:00Z`);
+      d.setUTCDate(d.getUTCDate() + offset);
+      const dayStr = d.toISOString().slice(0, 10);
+      const key = `${leagueGroup}:${dayStr}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      try {
+        await getGamesForDateAnySport(dayStr, leagueGroup as LeagueGroup);
+      } catch (err) {
+        console.warn(`[repair] ${leagueGroup} ${dayStr} failed, will retry next boot`, err);
+      }
+      await new Promise((r) => setTimeout(r, 400));
+    }
+    console.log(`[repair] swept ${leagueGroup} around ${date}`);
+  }
+  console.log("[repair] placeholder sweep done");
+}
