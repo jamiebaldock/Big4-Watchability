@@ -122,7 +122,19 @@ function requiredTitlePatternFor(league: HighlightsLeague): RegExp {
 // broadcast replay is 3+ hours, nowhere near this) while admitting a real
 // postseason package.
 function maxHighlightsSecondsFor(league: HighlightsLeague): number {
-  if (league === "mlb") return 30 * 60;
+  // NFL belongs here for the same reason MLB does, and this was missed when
+  // MLB was raised on 2026-10-19: that change assumed NFL reels "run 10-13
+  // min" without checking. They do not. The real @NFL upload for Bills @
+  // Rams, one of the games stuck on "No match found", is 22:25 - over the
+  // 20-minute cap, so it was discarded on length no matter how right the
+  // title predicate was. The same matchup's 2024 video is 15:05, so these
+  // have grown; a cap set from older reels no longer holds.
+  //
+  // One confirmed sample rather than a distribution (YouTube started
+  // rate-limiting the checks), so 30 min is deliberately generous margin
+  // over the 22:25 observed rather than a tight fit. Still meaningfully
+  // protective: a full NFL broadcast replay runs 3+ hours.
+  if (league === "mlb" || league === "nfl") return 30 * 60;
   return MAX_HIGHLIGHTS_SECONDS;
 }
 
