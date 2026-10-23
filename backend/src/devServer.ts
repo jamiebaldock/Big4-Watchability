@@ -17,7 +17,12 @@ import {
   getTeamScheduleForLeagueGroup,
   getTeamsForLeagueGroup,
 } from "./httpHandler";
-import { getDatesWithPlaceholderTeams } from "./gameStore";
+import {
+  getDatesWithPlaceholderTeams,
+  isMigrationComplete,
+  markMigrationComplete,
+  rearmUnmatchedHighlights,
+} from "./gameStore";
 import type { LeagueGroup } from "./types";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import {
@@ -396,6 +401,7 @@ app.listen(PORT, () => {
   // 5-league ESPN hit is safe to resume.
   startAlertsPoller();
   repairPlaceholderDays();
+  rearmHighlightsAfterMatcherFixes();
 });
 
 /**
@@ -445,4 +451,45 @@ async function repairPlaceholderDays(): Promise<void> {
     console.log(`[repair] swept ${leagueGroup} around ${date}`);
   }
   console.log("[repair] placeholder sweep done");
+}
+
+// One-shot re-arm of games stranded by the October 2026 matcher bugs.
+//
+// Three real faults were fixed that month - NFL requiring a phrase its
+// titles never carried, MLB's numbered postseason titles splitting the
+// required phrase, and a 20-minute duration cap that discarded both
+// leagues' real reels (NFL's Bills @ Rams runs 22:25, MLB's ALCS packages
+// 21:48 and 23:55). Every game that failed while those were live had
+// already spent MAX_HIGHLIGHTS_CHECKS, so fixing the matcher did nothing
+// for them: isDueForHighlightsCheck will not look at an exhausted game
+// again, and the only manual remedy was the Admin page's per-game
+// Re-search button.
+//
+// Behind a run-once flag on purpose. This one is NOT self-extinguishing
+// like repairPlaceholderDays - a game with no official video at all (an NFL
+// Thursday-night game is the known case) will never match however many
+// times it is retried, so a condition-driven version would re-arm it on
+// every boot and spend search quota on it forever. One pass, recorded,
+// never again.
+//
+// The retries themselves are already governed: the poller takes them a
+// batch at a time and canSpendSearchQuota is a hard ceiling, so this cannot
+// blow the daily budget however many rows it re-arms - it just spreads the
+// catch-up over however long it takes.
+const REARM_FLAG = "rearm-unmatched-highlights-2026-10";
+const REARM_WINDOW_DAYS = 30;
+
+function rearmHighlightsAfterMatcherFixes(): void {
+  try {
+    if (isMigrationComplete(REARM_FLAG)) return;
+    const count = rearmUnmatchedHighlights(REARM_WINDOW_DAYS);
+    markMigrationComplete(REARM_FLAG);
+    console.log(
+      `[rearm] ${count} game(s) from the last ${REARM_WINDOW_DAYS} days re-armed for another highlights check`
+    );
+  } catch (err) {
+    // Never block startup for a cleanup task. The flag is only written on
+    // success, so a failure here simply retries on the next boot.
+    console.warn("[rearm] failed, will retry next boot", err);
+  }
 }

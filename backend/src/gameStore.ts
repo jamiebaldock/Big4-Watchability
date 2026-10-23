@@ -1533,6 +1533,46 @@ export function getDatesWithPlaceholderTeams(): Array<{ leagueGroup: string; dat
     .all() as Array<{ leagueGroup: string; date: string }>;
 }
 
+/**
+ * Clears the exhausted check counter on recent final games that never found
+ * a highlights match, so isDueForHighlightsCheck will consider them again.
+ *
+ * Exists because a game that failed while the matcher itself was broken
+ * stays failed forever: MAX_HIGHLIGHTS_CHECKS is spent, nothing re-arms it,
+ * and fixing the matcher afterwards changes nothing for it. Three separate
+ * matcher bugs were fixed in October 2026 (NFL's title phrase, MLB's
+ * numbered postseason titles, and the duration cap being too low for both),
+ * and every game that failed under them was left stranded.
+ *
+ * Both columns are cleared, not just the counter: with yt_check_count back
+ * at 0 but yt_last_checked_at still recent, YT_MIN_CHECK_SPACING_MS would
+ * block the retry anyway.
+ *
+ * Scoped to games that actually finished within [days] and still have no
+ * video, so it can never touch a matched game or disturb the learned
+ * upload-lag history. Returns how many rows were re-armed.
+ *
+ * MUST be called behind a run-once flag. Unlike the placeholder sweep this
+ * is NOT self-extinguishing - a game with genuinely no official video (an
+ * NFL Thursday-night game, say) stays unmatched no matter how often it is
+ * retried, so a condition-driven version would re-arm it on every single
+ * boot and burn search quota forever.
+ */
+export function rearmUnmatchedHighlights(days: number): number {
+  const since = new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString();
+  const result = db
+    .prepare(
+      `UPDATE games SET yt_check_count=0, yt_last_checked_at=NULL, updated_at=?
+        WHERE status='final'
+          AND yt_video_id IS NULL
+          AND yt_check_count > 0
+          AND final_at IS NOT NULL
+          AND final_at >= ?`
+    )
+    .run(now(), since);
+  return result.changes;
+}
+
 export function closeDb(): void {
   db.close();
 }
