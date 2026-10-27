@@ -140,7 +140,23 @@ export async function getGamesForDateAnySport(date: string, leagueGroup: LeagueG
         : getGamesForDate(date, leagueGroup));
 
   if (cacheable) {
-    saveLeagueCache("scheduleDay", leagueGroup, date, games);
+    // An empty day is never written to the permanent cache. That cache does
+    // not expire, so a day that came back empty because the upstream fetch
+    // degraded - rather than because no games were played - would be frozen
+    // at zero games forever. That is exactly what was about to happen to
+    // 2026-10-27: ESPN's scoreboard answered 200 with an empty body for
+    // that date (see espnFetch.ts), fetchAllEvents turned the resulting
+    // parse error into "no events", and the date was one day away from
+    // crossing SAFELY_PAST_DAYS and being cached permanently.
+    //
+    // The two cases are genuinely indistinguishable here - a real off-day
+    // and a failed fetch both arrive as an empty array - so the cheap,
+    // always-correct option is to not persist either. The cost is
+    // re-fetching real off-days, which are small, fast responses; the
+    // alternative risks silently losing a whole day of games permanently.
+    if (games.length > 0) {
+      saveLeagueCache("scheduleDay", leagueGroup, date, games);
+    }
   } else {
     liveGamesCache.set(`${leagueGroup}:${date}`, { games, expiresAt: Date.now() + LIVE_CACHE_TTL_MS });
   }

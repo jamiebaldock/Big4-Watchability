@@ -35,7 +35,33 @@ export async function fetchEspnJson<T>(url: string, label = ""): Promise<T> {
     const res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" }
     });
-    if (res.ok) return (await res.json()) as T;
+    if (res.ok) {
+      // NOT res.json() directly. ESPN can answer 200 with a zero-length
+      // body - confirmed 2026-10-28 against
+      // /basketball/nba/scoreboard?dates=20261027, which returned 200 and 0
+      // bytes four times in a row while the days either side returned 214KB
+      // and 44KB normally, and while their own CDN schedule endpoint still
+      // listed all 7 games for that date. res.json() throws a SyntaxError
+      // from inside this success branch, which skipped the retry loop
+      // entirely and surfaced upstream as "this league has no games today"
+      // once fetchAllEvents swallowed it.
+      //
+      // Reading the text first turns that into an ordinary retryable
+      // failure: a malformed success is a failure, not an empty result.
+      const body = await res.text();
+      if (body.trim().length > 0) {
+        try {
+          return JSON.parse(body) as T;
+        } catch (err) {
+          lastError = new Error(`${prefix} returned unparseable JSON (${url}): ${String(err)}`);
+        }
+      } else {
+        lastError = new Error(`${prefix} returned an empty body with status 200 (${url})`);
+      }
+      if (attempt === RETRY_DELAYS_MS.length) throw lastError;
+      await sleep(RETRY_DELAYS_MS[attempt]);
+      continue;
+    }
 
     lastError = new Error(`${prefix} failed: ${res.status} ${res.statusText} (${url})`);
     if (!RETRYABLE_STATUSES.has(res.status) || attempt === RETRY_DELAYS_MS.length) {
