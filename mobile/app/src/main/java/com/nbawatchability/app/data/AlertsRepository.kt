@@ -44,7 +44,11 @@ data class BelledGameSnapshot(
     val eventId: String,
     val away: String,
     val home: String,
-    val tipoffUtc: String
+    val tipoffUtc: String,
+    // Game.league's "lg" value (nba/wnba/mlb/nfl/nhl/summer) - defaulted so
+    // snapshots persisted before this field existed still decode instead of
+    // dropping the whole belled-games list (see belledSnapshots' runCatching).
+    val league: String = "nba"
 )
 
 /** Mirrors alertStore.ts's AlertDelivery ("push" | "in_app" | "both"). */
