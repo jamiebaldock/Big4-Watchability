@@ -842,8 +842,13 @@ export function setSeasonStageLabel(eventId: string, label: string): void {
  * pass needs. Only meant to be reached from a temporary admin route,
  * removed once run once against production and confirmed.
  */
-export function forceSetSeasonStageLabel(eventId: string, label: string): void {
-  statements.forceSetSeasonStageLabel.run(label, now(), eventId);
+export function forceSetSeasonStageLabel(eventId: string, label: string): number {
+  // Returns rows changed (0 or 1). An ESPN-driven relabel pass iterates over
+  // the scoreboard, which contains games we may have no row for at all, so
+  // "events considered" and "games actually relabelled" are different
+  // numbers - a sweep that reports the former overstates what it did.
+  // Existing void-expecting callers are unaffected by the wider return type.
+  return statements.forceSetSeasonStageLabel.run(label, now(), eventId).changes;
 }
 
 /**
@@ -1625,6 +1630,29 @@ export function getGameByLeagueAndTeamsAndDate(
  */
 export function updateTipoffTime(eventId: string, newTipoffUtc: string): void {
   db.prepare(`UPDATE games SET tipoff_utc = ? WHERE event_id = ? AND tipoff_utc IS NOT NULL`).run(newTipoffUtc, eventId);
+}
+
+/**
+ * Distinct tipoff dates of games in one league group still carrying a given
+ * season_stage_label, from `since` onwards. Backs the one-off NBA Cup
+ * relabel sweep in devServer.ts, which needs to know which days are worth
+ * re-asking ESPN about rather than refetching a whole season blindly.
+ *
+ * Dates come back as the stored UTC date. The Cup sweep widens each one by a
+ * day either side for the same reason repairPlaceholderDays does - ESPN
+ * groups its scoreboard by the event's own US-Eastern day, which for a
+ * late-evening tipoff is the day before the UTC date stored here.
+ */
+export function getDatesWithStageLabel(leagueGroup: LeagueGroup, label: string, since: string): string[] {
+  const rows = db
+    .prepare(
+      `SELECT DISTINCT substr(tipoff_utc, 1, 10) AS date
+         FROM games
+        WHERE league_group = ? AND season_stage_label = ? AND tipoff_utc >= ?
+        ORDER BY date`
+    )
+    .all(leagueGroup, label, since) as Array<{ date: string }>;
+  return rows.map((r) => r.date);
 }
 
 /**

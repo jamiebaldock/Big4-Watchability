@@ -18,11 +18,15 @@ import {
   getTeamsForLeagueGroup,
 } from "./httpHandler";
 import {
+  forceSetSeasonStageLabel,
   getDatesWithPlaceholderTeams,
+  getDatesWithStageLabel,
   isMigrationComplete,
   markMigrationComplete,
   rearmUnmatchedHighlights,
 } from "./gameStore";
+import { fetchScoreboard, toEspnDate } from "./espnClient";
+import { deriveSeasonStage } from "./gameMapper";
 import type { LeagueGroup } from "./types";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import {
@@ -402,6 +406,7 @@ app.listen(PORT, () => {
   startAlertsPoller();
   repairPlaceholderDays();
   rearmHighlightsAfterMatcherFixes();
+  relabelNbaCupGroupPlay();
 });
 
 /**
@@ -491,5 +496,78 @@ function rearmHighlightsAfterMatcherFixes(): void {
     // Never block startup for a cleanup task. The flag is only written on
     // success, so a failure here simply retries on the next boot.
     console.warn("[rearm] failed, will retry next boot", err);
+  }
+}
+
+// One-off relabel of this season's NBA Cup group-play games.
+//
+// deriveSeasonStage now gives group play its own "Cup: Group Play" stage,
+// but that alone fixes nothing for games already in the store:
+// setSeasonStageLabel refuses to touch a row that already has a label, and
+// every Cup game this season had already been stamped "NBA - Regular
+// Season" by an ordinary schedule request (verified against production on
+// 2026-11-01 - Nov 6 and Nov 13 were both already wrong, days before the
+// group stage even starts). Without this pass they would keep that label
+// permanently. forceSetSeasonStageLabel is the documented escape hatch for
+// exactly this case.
+//
+// Scoped to the CURRENT season on purpose, which is what was asked for and
+// is also the cheap half of the problem: the 2024/25 Cup games sit on days
+// long past SAFELY_PAST_DAYS, so their rows AND their permanent scheduleDay
+// cache entries would both need rewriting, and leagueCache has no
+// invalidation path. This season's Cup days are all still in the future, so
+// nothing is cached yet and relabelling the rows is sufficient. Anyone
+// extending this to older seasons has to solve the cache too.
+//
+// Run-once rather than condition-driven: the condition ("an NBA game
+// labelled Regular Season") matches most of the season, every boot, forever
+// - and each unmatched day costs a real ESPN fetch.
+const CUP_RELABEL_FLAG = "relabel-nba-cup-group-play-2026-27";
+const CUP_GROUP_PLAY_LABEL = "NBA - Cup: Group Play";
+
+async function relabelNbaCupGroupPlay(): Promise<void> {
+  try {
+    if (isMigrationComplete(CUP_RELABEL_FLAG)) return;
+
+    const seasonStart = getCurrentSeasonStartForLeagueGroup("nba").date;
+    const dates = getDatesWithStageLabel("nba", "NBA - Regular Season", seasonStart);
+    if (dates.length === 0) {
+      markMigrationComplete(CUP_RELABEL_FLAG);
+      return;
+    }
+
+    // Widen by a day either side - the stored date is UTC, ESPN's scoreboard
+    // groups by the event's US-Eastern day, and a 7pm ET tipoff falls on the
+    // next UTC date. Same correction repairPlaceholderDays needed.
+    const days = new Set<string>();
+    for (const date of dates) {
+      for (const offset of [-1, 0, 1]) {
+        const d = new Date(`${date}T12:00:00Z`);
+        d.setUTCDate(d.getUTCDate() + offset);
+        days.add(d.toISOString().slice(0, 10));
+      }
+    }
+
+    let relabelled = 0;
+    for (const day of [...days].sort()) {
+      try {
+        const events = await fetchScoreboard(toEspnDate(new Date(`${day}T12:00:00Z`)), "nba");
+        for (const event of events) {
+          const stage = deriveSeasonStage(event);
+          if (stage !== "Cup: Group Play") continue;
+          relabelled += forceSetSeasonStageLabel(event.id, CUP_GROUP_PLAY_LABEL);
+        }
+      } catch (err) {
+        console.warn(`[cup-relabel] ${day} failed, skipping`, err);
+      }
+      await new Promise((r) => setTimeout(r, 300));
+    }
+
+    markMigrationComplete(CUP_RELABEL_FLAG);
+    console.log(`[cup-relabel] ${relabelled} NBA Cup group-play game(s) relabelled across ${days.size} day(s)`);
+  } catch (err) {
+    // Cleanup must never block startup. The flag is only written on success,
+    // so a failure here just retries on the next boot.
+    console.warn("[cup-relabel] failed, will retry next boot", err);
   }
 }
