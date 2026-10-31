@@ -26,7 +26,7 @@ import {
   rearmUnmatchedHighlights,
 } from "./gameStore";
 import { fetchScoreboard, toEspnDate } from "./espnClient";
-import { deriveSeasonStage } from "./gameMapper";
+import { deriveCompetitionLabel } from "./gameMapper";
 import type { LeagueGroup } from "./types";
 import { registerAlertDevice, setAlertGameSub } from "./alertsService";
 import {
@@ -499,7 +499,7 @@ function rearmHighlightsAfterMatcherFixes(): void {
   }
 }
 
-// One-off relabel of this season's NBA Cup group-play games.
+// One-off relabel of this season's NBA Cup games to their full names.
 //
 // deriveSeasonStage now gives group play its own "Cup: Group Play" stage,
 // but that alone fixes nothing for games already in the store:
@@ -522,15 +522,19 @@ function rearmHighlightsAfterMatcherFixes(): void {
 // Run-once rather than condition-driven: the condition ("an NBA game
 // labelled Regular Season") matches most of the season, every boot, forever
 // - and each unmatched day costs a real ESPN fetch.
-const CUP_RELABEL_FLAG = "relabel-nba-cup-group-play-2026-27";
-const CUP_GROUP_PLAY_LABEL = "NBA - Cup: Group Play";
+// v2: the label text itself changed (plain "Cup" -> the sponsored
+// "Emirates NBA Cup", plus the knockout round). Games the v1 pass already
+// rewrote carry the interim wording, so the stale set below has to include
+// it or they would keep it forever - a bumped flag alone is not enough.
+const CUP_RELABEL_FLAG = "relabel-nba-cup-full-names-2026-27-v2";
+const STALE_CUP_LABELS = ["NBA - Regular Season", "NBA - Cup", "NBA - Cup: Group Play"];
 
 async function relabelNbaCupGroupPlay(): Promise<void> {
   try {
     if (isMigrationComplete(CUP_RELABEL_FLAG)) return;
 
     const seasonStart = getCurrentSeasonStartForLeagueGroup("nba").date;
-    const dates = getDatesWithStageLabel("nba", "NBA - Regular Season", seasonStart);
+    const dates = STALE_CUP_LABELS.flatMap((label) => getDatesWithStageLabel("nba", label, seasonStart));
     if (dates.length === 0) {
       markMigrationComplete(CUP_RELABEL_FLAG);
       return;
@@ -553,9 +557,12 @@ async function relabelNbaCupGroupPlay(): Promise<void> {
       try {
         const events = await fetchScoreboard(toEspnDate(new Date(`${day}T12:00:00Z`)), "nba");
         for (const event of events) {
-          const stage = deriveSeasonStage(event);
-          if (stage !== "Cup: Group Play") continue;
-          relabelled += forceSetSeasonStageLabel(event.id, CUP_GROUP_PLAY_LABEL);
+          // Only Cup games are rewritten. Force-setting whatever the mapper
+          // now returns for EVERY event would churn ordinary games too, and
+          // forceSet bypasses the guard that normally makes that safe.
+          const label = deriveCompetitionLabel(event, "nba");
+          if (!label?.includes("Emirates NBA Cup")) continue;
+          relabelled += forceSetSeasonStageLabel(event.id, label);
         }
       } catch (err) {
         console.warn(`[cup-relabel] ${day} failed, skipping`, err);

@@ -246,11 +246,17 @@ function derivePlayoffRound(headline: string): string {
  * headline of exactly "NBA Cup - Group Play", while knockout games say
  * "NBA Cup - Quarterfinals"/"- Semifinals"/"NBA Cup Championship" - group
  * play is, for standings purposes, an ordinary regular-season game
- * (event.season.slug is "regular-season" for both), so the two get
- * DIFFERENT Cup stages rather than the same one: knockout games are
- * "Cup", group play is "Cup: Group Play". Group play used to fall through
- * to the plain "Regular Season" label; see the note inside the function for
- * why that changed and why no scoring change came with it. WNBA's Commissioner's Cup
+ * (event.season.slug is "regular-season" for both), but it gets its own
+ * labelled round rather than falling through to the plain "Regular Season"
+ * label it used to - the NBA badges these games heavily and the app was
+ * showing nine of them a night as an ordinary Friday. Every Cup game, group
+ * or knockout, is named and rounded by cupStage below.
+ *
+ * Deliberately no scoring change came with that. Whether Cup games are
+ * better viewing was measured, not assumed: across the Nov-Dec windows of
+ * 2024 and 2025, 112 group games averaged 25.9 and 14 knockout games 26.5,
+ * against 27.2 for the 546 ordinary games in those same weeks. Both
+ * differences sit inside the noise and both point the wrong way. WNBA's Commissioner's Cup
  * notes don't follow the same "- Group Play" convention (its group-stage
  * games are just headlined "WNBA Commissioner's Cup" with no qualifier), so
  * for WNBA every Cup-notes game - group and championship alike - gets the
@@ -263,28 +269,59 @@ function derivePlayoffRound(headline: string): string {
  * hardcoded date range would need updating every season anyway - exactly
  * what this is meant to avoid.
  */
+/**
+ * Full competition name + round for a game ESPN flagged with a Cup note.
+ *
+ * Derived from the note headline rather than the league, because the
+ * headline is the authoritative thing and already distinguishes the two
+ * competitions. Every branch below is matched against a real ESPN string,
+ * counted across the Nov-Dec windows of 2024 and 2025 and the 2025 WNBA
+ * season rather than guessed:
+ *
+ *   "NBA Cup - Group Play"                  -> Emirates NBA Cup: Group Play
+ *   "NBA Cup - Quarterfinals"           8x  -> Emirates NBA Cup: Quarterfinals
+ *   "NBA Cup - Semifinals"              4x  -> Emirates NBA Cup: Semifinals
+ *   "NBA Cup Championship"              2x  -> Emirates NBA Cup: Championship
+ *   "WNBA Commissioner's Cup"          36x  -> Commissioner's Cup
+ *   "WNBA Commissioner's Cup Championship"  -> Commissioner's Cup: Championship
+ *
+ * Note the NBA's knockout headlines use " - " before the round while the
+ * Championship does not, and that the WNBA's group-stage games carry no
+ * round qualifier at all - hence matching on the round words themselves
+ * instead of splitting the string.
+ *
+ * "Emirates" is a sponsor name and is NOT in ESPN's headline, so it is
+ * hardcoded here. That is the one thing in this function that will go stale
+ * on its own: if the NBA changes title sponsor, this string is the only
+ * place to change, and nothing will fail loudly to tell you.
+ *
+ * The league prefix is added by deriveCompetitionLabel, so "NBA" is left off
+ * the WNBA's name here ("WNBA - Commissioner's Cup", not "WNBA - WNBA
+ * Commissioner's Cup"). The NBA's sponsored name unavoidably repeats it.
+ */
+function cupStage(headline: string): string {
+  const h = headline.toLowerCase();
+  const competition = h.includes("commissioner") ? "Commissioner's Cup" : "Emirates NBA Cup";
+
+  const round = h.includes("group play")
+    ? "Group Play"
+    : h.includes("quarterfinal")
+      ? "Quarterfinals"
+      : h.includes("semifinal")
+        ? "Semifinals"
+        : h.includes("championship")
+          ? "Championship"
+          : undefined;
+
+  return round ? `${competition}: ${round}` : competition;
+}
+
 export function deriveSeasonStage(event: EspnEvent): string | undefined {
   const notes = event.competitions[0]?.notes ?? [];
   if (notes.some((n) => n.headline?.toLowerCase().includes("all-star"))) return "All-Star";
 
   const cupNote = notes.find((n) => n.headline?.toLowerCase().includes("cup"));
-  if (cupNote) {
-    // Group play now gets its own label rather than falling through to
-    // "Regular Season" (changed 2026-11-01). It IS a regular-season game for
-    // standings - that reasoning still holds and is why it keeps a distinct
-    // stage rather than being lumped in with the knockout rounds - but the
-    // label's job is to tell a viewer what they are watching, and the NBA
-    // badges these games heavily ("Emirates NBA Cup - East Group C") while
-    // the app was showing nine of them a night as an ordinary Friday.
-    //
-    // Deliberately NOT accompanied by any scoring change. Whether Cup games
-    // are better viewing was measured, not assumed: across the Nov-Dec
-    // windows of 2024 and 2025, 112 group games averaged 25.9 against 27.2
-    // for the 546 ordinary games in those same weeks, and 14 knockout games
-    // averaged 26.5. Both differences sit well inside the noise, and both
-    // point the wrong way. The Cup is worth labelling, not worth a bonus.
-    return cupNote.headline.toLowerCase().includes("group play") ? "Cup: Group Play" : "Cup";
-  }
+  if (cupNote) return cupStage(cupNote.headline);
 
   switch (event.season?.slug) {
     case "preseason":
