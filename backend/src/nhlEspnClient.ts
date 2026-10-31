@@ -22,6 +22,12 @@ export interface EspnNhlCompetitor {
   id: string;
   homeAway: "home" | "away";
   winner?: boolean;
+  /**
+   * Present on the scoreboard for every sport (verified live 2026-10-28) but
+   * only declared now that the pre-game snapshot reads it. `type: "total"` is
+   * the overall record; the summary is "W-L" here and "W-L-OTL" for NHL.
+   */
+  records?: Array<{ name: string; type: string; summary: string }>;
   team: EspnNhlTeam;
   score: string;
 }

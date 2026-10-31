@@ -51,6 +51,7 @@ import { isDueForHighlightsCheck } from "./gamesService";
 import { mapNhlEspnState, mapNhlEventToGame } from "./nhlGameMapper";
 import { EspnNhlEvent, fetchNhlScoreboard, fetchNhlSummary, fetchNhlTeamSchedule } from "./nhlEspnClient";
 import { generateHookAndStakes } from "./llm";
+import { capturePregameSnapshot } from "./pregameForecast";
 import { computeNhlWatchabilityScore, tierForNhlScore } from "./nhlRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
@@ -177,6 +178,12 @@ async function processNhlEvent(event: EspnNhlEvent): Promise<GameJson | null> {
   setSeasonStageLabel(event.id, deriveNhlCompetitionLabel(event.season?.type, competition.notes?.[0]?.headline));
 
   let row = getGame(event.id)!;
+
+  // Records-at-tipoff + outlook index. No status branch needed and none
+  // wanted: this refreshes while the game is still upcoming and freezes
+  // itself at tipoff (see gameStore.setPregameSnapshot). Instrumentation
+  // only - nothing here reaches the apps. pregameForecast.ts explains why.
+  capturePregameSnapshot(event.id, away, home, row.seasonStageLabel);
 
   if (status !== "final") {
     await ensureNhlPregamePreview(row);

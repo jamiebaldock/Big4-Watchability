@@ -36,6 +36,7 @@ import { isDueForHighlightsCheck } from "./gamesService";
 import { mapNflEspnState, mapNflEventToGame } from "./nflGameMapper";
 import { EspnNflEvent, fetchNflScoreboard, fetchNflSummary, fetchNflTeamSchedule } from "./nflEspnClient";
 import { generateHookAndStakes } from "./llm";
+import { capturePregameSnapshot } from "./pregameForecast";
 import { computeNflWatchabilityScore, tierForNflScore } from "./nflRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
@@ -176,6 +177,12 @@ async function processNflEvent(event: EspnNflEvent): Promise<GameJson | null> {
   setSeasonStageLabel(event.id, deriveNflCompetitionLabel(event.season?.type, event.week?.number));
 
   let row = getGame(event.id)!;
+
+  // Records-at-tipoff + outlook index. No status branch needed and none
+  // wanted: this refreshes while the game is still upcoming and freezes
+  // itself at tipoff (see gameStore.setPregameSnapshot). Instrumentation
+  // only - nothing here reaches the apps. pregameForecast.ts explains why.
+  capturePregameSnapshot(event.id, away, home, row.seasonStageLabel);
 
   if (status !== "final") {
     await ensureNflPregamePreview(row);

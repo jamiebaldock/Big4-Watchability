@@ -42,6 +42,7 @@ import { isDueForHighlightsCheck } from "./gamesService";
 import { mapMlbEspnState, mapMlbEventToGame } from "./mlbGameMapper";
 import { EspnMlbEvent, fetchMlbCalendarDates, fetchMlbScoreboard, fetchMlbSummary, fetchMlbTeamSchedule } from "./mlbEspnClient";
 import { generateHookAndStakes } from "./llm";
+import { capturePregameSnapshot } from "./pregameForecast";
 import { computeMlbWatchabilityScore, tierForMlbScore } from "./mlbRubric";
 import { GameJson } from "./types";
 import { isYoutubeSearchConfigured, searchHighlightsVideo } from "./youtubeClient";
@@ -173,6 +174,12 @@ async function processMlbEvent(event: EspnMlbEvent): Promise<GameJson | null> {
   setSeasonStageLabel(event.id, deriveMlbCompetitionLabel(event));
 
   let row = getGame(event.id)!;
+
+  // Records-at-tipoff + outlook index. No status branch needed and none
+  // wanted: this refreshes while the game is still upcoming and freezes
+  // itself at tipoff (see gameStore.setPregameSnapshot). Instrumentation
+  // only - nothing here reaches the apps. pregameForecast.ts explains why.
+  capturePregameSnapshot(event.id, away, home, row.seasonStageLabel);
 
   if (status !== "final") {
     await ensureMlbPregamePreview(row);

@@ -258,6 +258,32 @@ ensureColumn("games", "nfl_rubric_inputs", "TEXT");
 // day one (not retrofitted) per feedback_new_league_full_pipeline_checklist.md.
 ensureColumn("games", "nhl_rubric_inputs", "TEXT");
 
+// --- Pre-game forecast instrumentation (2026-10-28) ---
+// Each team's record as it stood going INTO this game, plus a 0-100 outlook
+// index derived from it. The records are the irreplaceable part: standings
+// move, so once a game is played the record the teams carried into it is
+// gone from every live API we have. The forecast is recomputable from the
+// stored win percentages at any time, which is why the inputs are stored
+// alongside it rather than just the output.
+//
+// Raw summary strings are kept next to the parsed percentages on purpose -
+// they are the audit trail, so a parser bug found later (NHL's three-part
+// "7-3-1" being the obvious candidate) can be corrected retroactively
+// instead of having quietly destroyed the only copy of the data.
+//
+// pre_snapshot_at doubles as the "was this ever captured" flag. It stays
+// NULL for every game first seen at or after tipoff - including the entire
+// historical backfill - because there is no honest way to reconstruct a
+// record from the past, and writing today's record would be worse than
+// writing nothing. See setPregameSnapshot for the capture window.
+ensureColumn("games", "pre_away_record", "TEXT");
+ensureColumn("games", "pre_home_record", "TEXT");
+ensureColumn("games", "pre_away_win_pct", "REAL");
+ensureColumn("games", "pre_home_win_pct", "REAL");
+ensureColumn("games", "pre_forecast", "INTEGER");
+ensureColumn("games", "pre_forecast_version", "TEXT");
+ensureColumn("games", "pre_snapshot_at", "TEXT");
+
 // The one shared handle to games.db - alertStore.ts's tables live in this
 // same file (same durability story: whatever disk games.db survives deploys
 // on, the alert tables survive with it), and sharing the connection rather
@@ -392,6 +418,20 @@ const statements = {
     `UPDATE games SET yt_video_id=NULL, yt_found_at=NULL, yt_published_at=NULL, yt_check_count=0, yt_last_checked_at=NULL, updated_at=? WHERE event_id=?`
   ),
   setPreview: db.prepare(`UPDATE games SET hook=?, pitch=?, stakes=?, updated_at=? WHERE event_id=? AND hook IS NULL`),
+  // Guarded on status='upcoming' rather than on its own column being NULL,
+  // which is the opposite of setPreview's write-once guard and deliberate.
+  // A snapshot wants to be as close to tipoff as possible, so this REFRESHES
+  // on every pre-game sighting and then freezes itself the moment the row's
+  // status flips to live/final - at which point this UPDATE silently matches
+  // nothing. No separate freeze step to get wrong, and a game first seen
+  // already in progress is never given a fabricated pre-game record.
+  // (updateStatus runs before this in every caller, so the status read here
+  // is the current one, not a stale one.)
+  setPregameSnapshot: db.prepare(
+    `UPDATE games SET pre_away_record=?, pre_home_record=?, pre_away_win_pct=?, pre_home_win_pct=?,
+            pre_forecast=?, pre_forecast_version=?, pre_snapshot_at=?, updated_at=?
+     WHERE event_id=? AND status='upcoming'`
+  ),
 };
 
 export interface FinalRubric {
@@ -447,6 +487,13 @@ export interface GameRow {
   mlbRubricInputs: MlbRubricInputs | null;
   nflRubricInputs: NflRubricInputs | null;
   nhlRubricInputs: NhlRubricInputs | null;
+  preAwayRecord: string | null;
+  preHomeRecord: string | null;
+  preAwayWinPct: number | null;
+  preHomeWinPct: number | null;
+  preForecast: number | null;
+  preForecastVersion: string | null;
+  preSnapshotAt: string | null;
 }
 
 /**
@@ -569,6 +616,13 @@ interface RawGameRow {
   mlb_rubric_inputs: string | null;
   nfl_rubric_inputs: string | null;
   nhl_rubric_inputs: string | null;
+  pre_away_record: string | null;
+  pre_home_record: string | null;
+  pre_away_win_pct: number | null;
+  pre_home_win_pct: number | null;
+  pre_forecast: number | null;
+  pre_forecast_version: string | null;
+  pre_snapshot_at: string | null;
 }
 
 function parseStandoutPerformers(raw: string | null): StandoutPerformerJson[] {
@@ -628,7 +682,31 @@ function mapRow(raw: RawGameRow): GameRow {
     mlbRubricInputs: parseMlbRubricInputs(raw.mlb_rubric_inputs),
     nflRubricInputs: parseNflRubricInputs(raw.nfl_rubric_inputs),
     nhlRubricInputs: parseNhlRubricInputs(raw.nhl_rubric_inputs),
+    preAwayRecord: raw.pre_away_record,
+    preHomeRecord: raw.pre_home_record,
+    preAwayWinPct: raw.pre_away_win_pct,
+    preHomeWinPct: raw.pre_home_win_pct,
+    preForecast: raw.pre_forecast,
+    preForecastVersion: raw.pre_forecast_version,
+    preSnapshotAt: raw.pre_snapshot_at,
   };
+}
+
+/**
+ * Every game that has both a pre-game snapshot and a final score - i.e. the
+ * forecast-vs-outcome dataset. Backs gradePregameForecast.ts. Returns full
+ * GameRows rather than a narrow projection so the grading script can add
+ * dimensions (stage, margin, the raw records) without another store change.
+ */
+export function allScoredGamesWithForecast(): GameRow[] {
+  const raw = db
+    .prepare(
+      `SELECT * FROM games
+       WHERE pre_forecast IS NOT NULL AND score IS NOT NULL AND status='final'
+       ORDER BY tipoff_utc`
+    )
+    .all() as RawGameRow[];
+  return raw.map(mapRow);
 }
 
 export function getGame(eventId: string): GameRow | undefined {
@@ -703,6 +781,43 @@ export function getHeadToHead(leagueGroup: LeagueGroup, teamA: string, teamB: st
 /** Pregame preview (hook/pitch/stakes) - set once, 24h before tipoff, permanent. */
 export function setPreview(eventId: string, hook: string, pitch: string, stakes: number): void {
   statements.setPreview.run(hook, pitch, stakes, now(), eventId);
+}
+
+export interface PregameSnapshot {
+  awayRecord: string;
+  homeRecord: string;
+  awayWinPct: number;
+  homeWinPct: number;
+  forecast: number;
+  forecastVersion: string;
+}
+
+/**
+ * Records-at-tipoff plus the derived outlook index - see pregameForecast.ts
+ * for why this is collected and what it is deliberately not.
+ *
+ * Safe to call on every pre-game sighting of a game: the statement's own
+ * status='upcoming' guard keeps refreshing the snapshot while the game is
+ * still ahead of us (so the stored records are the freshest ones before
+ * tipoff) and then makes every later call a no-op for free. Callers do not
+ * need to check the status themselves, and must NOT write `stakes` instead -
+ * that column is an input to the watchability score itself (rubric.ts
+ * stakesPoints), and populating it now would move every new game's score
+ * relative to the ~11k historical rows that were all scored with it null.
+ */
+export function setPregameSnapshot(eventId: string, snap: PregameSnapshot): void {
+  const ts = now();
+  statements.setPregameSnapshot.run(
+    snap.awayRecord,
+    snap.homeRecord,
+    snap.awayWinPct,
+    snap.homeWinPct,
+    snap.forecast,
+    snap.forecastVersion,
+    ts,
+    ts,
+    eventId
+  );
 }
 
 /**

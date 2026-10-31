@@ -18,6 +18,7 @@ import {
   upsertBaseEntry,
 } from "./gameStore";
 import { generateHookAndStakes } from "./llm";
+import { capturePregameSnapshot } from "./pregameForecast";
 import { computeWatchabilityScore, tierForScore } from "./rubric";
 import { preferDarkLogoVariant, teamLogoUrl } from "./teamLogos";
 import { GameJson, LeagueGroup } from "./types";
@@ -360,6 +361,12 @@ async function processEvent(league: League, leagueGroup: BasketballLeagueGroup, 
   // available once the game graduates into History, long after the raw
   // ESPN event/notes data used to derive it is gone.
   if (cl) setSeasonStageLabel(event.id, cl);
+
+  // Records-at-tipoff + outlook index. No status branch needed and none
+  // wanted: this refreshes while the game is still upcoming and freezes
+  // itself at tipoff (see gameStore.setPregameSnapshot). Instrumentation
+  // only - nothing here reaches the apps. pregameForecast.ts explains why.
+  capturePregameSnapshot(event.id, away, home, cl);
 
   if (status !== "final") {
     await ensurePregamePreview(row, league, event);
